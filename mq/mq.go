@@ -9,6 +9,11 @@ import (
 	"github.com/iron-io/iron_go/config"
 )
 
+type Timestamped struct {
+	CreatedAt time.Time `json:"created_at,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
+}
+
 type Queue struct {
 	Settings config.Settings
 	Name     string
@@ -20,28 +25,42 @@ type QueueSubscriber struct {
 }
 
 type QueueInfo struct {
-	Id            string            `json:"id,omitempty"`
-	Name          string            `json:"name,omitempty"`
-	PushType      string            `json:"push_type,omitempty"`
-	Reserved      int               `json:"reserved,omitempty"`
-	RetriesDelay  int               `json:"retries,omitempty"`
-	Retries       int               `json:"retries_delay,omitempty"`
-	Size          int               `json:"size,omitempty"`
-	Subscribers   []QueueSubscriber `json:"subscribers,omitempty"`
-	TotalMessages int               `json:"total_messages,omitempty"`
-	ErrorQueue    string            `json:"error_queue,omitempty"`
+	Name string `json:"name,omitempty"`
+	Timestamped
+	Size          int      `json:"size,omitempty"`
+	ExpiresIn     int      `json:"expires_in,omitempty"`
+	TotalMessages int      `json:"total_messages,omitempty"`
+	Push          PushInfo `json:"push,omitempty"`
+	Alerts        []Alert  `json:"alerts,omitempty"`
+}
+
+type PushInfo struct {
+	Type         string            `json:"type"`
+	RetriesDelay int               `json:"retries_delay,omitempty"`
+	Retries      int               `json:"retries,omitempty"`
+	Subscribers  []QueueSubscriber `json:"subscribers,omitempty"`
+	ErrorQueue   string            `json:"error_queue,omitempty"`
+}
+
+type Alert struct {
+	Type      string `json:"type"`
+	Trigger   int    `json:"trigger"`
+	Direction string `json:"direction"`
+	Queue     string `json:"queue"`
+	Snooze    int    `json:"snooze"`
 }
 
 type Message struct {
-	Id   string `json:"id,omitempty"`
+	Id string `json:"id,omitempty"`
+	Timestamped
 	Body string `json:"body"`
-	// Timeout is the amount of time in seconds allowed for processing the
-	// message.
+	// Timeout is the amount of time in seconds allowed for processing the message.
 	Timeout int64 `json:"timeout,omitempty"`
-	// Delay is the amount of time in seconds to wait before adding the message
-	// to the queue.
-	Delay int64 `json:"delay,omitempty"`
-	q     Queue
+	// Delay is the amount of time in seconds to wait before adding the message to the queue.
+	Delay         int64     `json:"delay,omitempty"`
+	ReservedUntil time.Time `json:"reserved_until,omitempty"`
+	ReservedCount int       `json:"reserved_count,omitempty"`
+	q             Queue     // todo: shouldn't this be a pointer?
 }
 
 type PushStatus struct {
@@ -55,6 +74,12 @@ type Subscriber struct {
 	StatusCode int    `json:"status_code"`
 	Status     string `json:"status"`
 	URL        string `json:"url"`
+}
+
+type Subscription struct {
+	PushType     string
+	Retries      int
+	RetriesDelay int
 }
 
 func New(queueName string) *Queue {
@@ -101,21 +126,16 @@ func (q Queue) Update(qi QueueInfo) (QueueInfo, error) {
 	return out, err
 }
 
-type Subscription struct {
-	PushType     string
-	Retries      int
-	RetriesDelay int
-}
-
 func (q Queue) Subscribe(subscription Subscription, subscribers ...string) (err error) {
 	in := QueueInfo{
-		PushType:     subscription.PushType,
-		Retries:      subscription.Retries,
-		RetriesDelay: subscription.RetriesDelay,
-		Subscribers:  make([]QueueSubscriber, len(subscribers)),
-	}
+		Push: PushInfo{
+			Type:         subscription.PushType,
+			Retries:      subscription.Retries,
+			RetriesDelay: subscription.RetriesDelay,
+			Subscribers:  make([]QueueSubscriber, len(subscribers)),
+		}}
 	for i, subscriber := range subscribers {
-		in.Subscribers[i].URL = subscriber
+		in.Push.Subscribers[i].URL = subscriber
 	}
 	return q.queues(q.Name).Req("POST", &in, nil)
 }
