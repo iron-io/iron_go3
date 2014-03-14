@@ -39,9 +39,9 @@ var (
 		"mq": Settings{
 			Scheme:     "https",
 			Port:       443,
-			ApiVersion: "1",
+			ApiVersion: "3",
 			Host:       "mq-aws-us-east-1.iron.io",
-			UserAgent:  "iron_go/mq 1.0 (Go " + goVersion + ")",
+			UserAgent:  "iron_go/mq 3.0 (Go " + goVersion + ")",
 		},
 		"cache": Settings{
 			Scheme:     "https",

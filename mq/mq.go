@@ -60,6 +60,7 @@ type Message struct {
 	Delay         int64     `json:"delay,omitempty"`
 	ReservedUntil time.Time `json:"reserved_until,omitempty"`
 	ReservedCount int       `json:"reserved_count,omitempty"`
+	ReservationId string    `json:"reservation_id,omitempty"`
 	q             Queue     // todo: shouldn't this be a pointer?
 }
 
@@ -237,21 +238,28 @@ func (q Queue) Clear() (err error) {
 }
 
 // Delete message from queue
-func (q Queue) DeleteMessage(msgId string) (err error) {
-	return q.queues(q.Name, "messages", msgId).Req("DELETE", nil, nil)
+func (q Queue) DeleteMessage(msgId, reservationId string) (err error) {
+	body := map[string]string{
+		"reservation_id": reservationId,
+	}
+	return q.queues(q.Name, "messages", msgId).Req("DELETE", body, nil)
 }
 
 // Reset timeout of message to keep it reserved
-func (q Queue) TouchMessage(msgId string) (err error) {
-	return q.queues(q.Name, "messages", msgId, "touch").Req("POST", nil, nil)
+func (q Queue) TouchMessage(msgId, reservationId string) (err error) {
+	body := map[string]string{
+		"reservation_id": reservationId,
+	}
+	return q.queues(q.Name, "messages", msgId, "touch").Req("POST", body, nil)
 }
 
 // Put message back in the queue, message will be available after +delay+ seconds.
-func (q Queue) ReleaseMessage(msgId string, delay int64) (err error) {
-	in := struct {
+func (q Queue) ReleaseMessage(msgId, reservationId string, delay int64) (err error) {
+	body := struct {
 		Delay int64 `json:"delay"`
-	}{Delay: delay}
-	return q.queues(q.Name, "messages", msgId, "release").Req("POST", &in, nil)
+		ReservationId string `json:"reservation_id"`
+	}{Delay: delay, ReservationId: reservationId}
+	return q.queues(q.Name, "messages", msgId, "release").Req("POST", &body, nil)
 }
 
 func (q Queue) MessageSubscribers(msgId string) ([]*Subscriber, error) {
@@ -289,17 +297,17 @@ func actualPushStatus(subs []*Subscriber) bool {
 
 // Delete message from queue
 func (m Message) Delete() (err error) {
-	return m.q.DeleteMessage(m.Id)
+	return m.q.DeleteMessage(m.Id, m.ReservationId)
 }
 
 // Reset timeout of message to keep it reserved
 func (m Message) Touch() (err error) {
-	return m.q.TouchMessage(m.Id)
+	return m.q.TouchMessage(m.Id, m.ReservationId)
 }
 
 // Put message back in the queue, message will be available after +delay+ seconds.
 func (m Message) Release(delay int64) (err error) {
-	return m.q.ReleaseMessage(m.Id, delay)
+	return m.q.ReleaseMessage(m.Id, m.ReservationId, delay)
 }
 
 func (m Message) Subscribers() (interface{}, error) {
