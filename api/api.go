@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/iron-io/iron_go/config"
+	"github.com/iron-io/iron_go3/config"
 )
 
 type URL struct {
@@ -23,18 +23,18 @@ type URL struct {
 }
 
 var (
-	debug bool
+	Debug bool
 )
 
 func dbg(v ...interface{}) {
-	if debug {
+	if Debug {
 		fmt.Fprintln(os.Stderr, v...)
 	}
 }
 
 func init() {
 	if os.Getenv("IRON_API_DEBUG") != "" {
-		debug = true
+		Debug = true
 		dbg("debugging of api enabled")
 	}
 }
@@ -116,6 +116,7 @@ func (u *URL) Request(method string, body io.Reader) (response *http.Response, e
 		request.Header.Set("Content-Type", "application/json")
 	}
 
+	dbg("URL:", request.URL.String())
 	dbg("request:", fmt.Sprintf("%#v\n", request))
 
 	for tries := 0; tries <= MaxRequestRetries; tries++ {
@@ -174,10 +175,10 @@ func ResponseAsError(response *http.Response) HTTPResponseError {
 	}
 
 	defer response.Body.Close()
-	desc, found := HTTPErrorDescriptions[response.StatusCode]
-	if found {
-		return resErr{response: response, error: response.Status + ": " + desc}
-	}
+//	desc, found := HTTPErrorDescriptions[response.StatusCode]
+//	if found {
+//		return resErr{response: response, error: response.Status + ": " + desc}
+//	}
 
 	out := map[string]interface{}{}
 	err := json.NewDecoder(response.Body).Decode(&out)

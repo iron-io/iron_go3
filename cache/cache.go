@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/iron-io/iron_go/api"
-	"github.com/iron-io/iron_go/config"
+	"github.com/iron-io/iron_go3/api"
+	"github.com/iron-io/iron_go3/config"
 )
 
 var (

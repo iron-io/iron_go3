@@ -34,21 +34,21 @@ var (
 			Port:       443,
 			ApiVersion: "2",
 			Host:       "worker-aws-us-east-1.iron.io",
-			UserAgent:  "iron_go/worker 2.0 (Go " + goVersion + ")",
+			UserAgent:  "iron_go3/worker 2.0 (Go " + goVersion + ")",
 		},
 		"mq": Settings{
 			Scheme:     "https",
 			Port:       443,
 			ApiVersion: "3",
 			Host:       "mq-aws-us-east-1.iron.io",
-			UserAgent:  "iron_go/mq 3.0 (Go " + goVersion + ")",
+			UserAgent:  "iron_go3/mq 3.0 (Go " + goVersion + ")",
 		},
 		"cache": Settings{
 			Scheme:     "https",
 			Port:       443,
 			ApiVersion: "1",
 			Host:       "cache-aws-us-east-1.iron.io",
-			UserAgent:  "iron_go/cache 1.0 (Go " + goVersion + ")",
+			UserAgent:  "iron_go3/cache 1.0 (Go " + goVersion + ")",
 		},
 	}
 )

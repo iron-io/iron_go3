@@ -2,7 +2,7 @@ package cache_test
 
 import (
 	"fmt"
-	"github.com/iron-io/iron_go/cache"
+	"github.com/iron-io/iron_go3/cache"
 )
 
 func p(a ...interface{}) { fmt.Println(a...) }

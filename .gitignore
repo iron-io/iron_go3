@@ -24,3 +24,5 @@ _testmain.go
 *.sublime*
 .idea/
 *.iml
+
+iron.json

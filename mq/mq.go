@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/iron-io/iron_go/api"
-	"github.com/iron-io/iron_go/config"
+	"github.com/iron-io/iron_go3/api"
+	"github.com/iron-io/iron_go3/config"
 )
 
 type Timestamped struct {
@@ -217,7 +217,7 @@ func (q Queue) GetNWithTimeout(n, timeout int) (msgs []*Message, err error) {
 		Messages []*Message `json:"messages"`
 	}{}
 
-	err = q.queues(q.Name, "messages").
+	err = q.queues(q.Name, "reservations").
 		QueryAdd("n", "%d", n).
 		QueryAdd("timeout", "%d", timeout).
 		Req("GET", nil, &out)
@@ -234,7 +234,7 @@ func (q Queue) GetNWithTimeout(n, timeout int) (msgs []*Message, err error) {
 
 // Delete all messages in the queue
 func (q Queue) Clear() (err error) {
-	return q.queues(q.Name, "clear").Req("POST", nil, nil)
+	return q.queues(q.Name, "messages").Req("DELETE", nil, nil)
 }
 
 // Delete message from queue
@@ -256,7 +256,7 @@ func (q Queue) TouchMessage(msgId, reservationId string) (err error) {
 // Put message back in the queue, message will be available after +delay+ seconds.
 func (q Queue) ReleaseMessage(msgId, reservationId string, delay int64) (err error) {
 	body := struct {
-		Delay int64 `json:"delay"`
+		Delay         int64  `json:"delay"`
 		ReservationId string `json:"reservation_id"`
 	}{Delay: delay, ReservationId: reservationId}
 	return q.queues(q.Name, "messages", msgId, "release").Req("POST", &body, nil)
