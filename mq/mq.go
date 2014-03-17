@@ -89,7 +89,7 @@ func New(queueName string) *Queue {
 
 func (q Queue) queues(s ...string) *api.URL { return api.Action(q.Settings, "queues", s...) }
 
-func (q Queue) ListQueues(page, perPage int) (queues []Queue, err error) {
+func (q Queue) ListQueues(previous string, perPage int) (queues []Queue, err error) {
 	out := []struct {
 		Id         string
 		Project_id string
@@ -97,7 +97,7 @@ func (q Queue) ListQueues(page, perPage int) (queues []Queue, err error) {
 	}{}
 
 	err = q.queues().
-		QueryAdd("page", "%d", page).
+		QueryAdd("previous", "%v", previous).
 		QueryAdd("per_page", "%d", perPage).
 		Req("GET", nil, &out)
 	if err != nil {
