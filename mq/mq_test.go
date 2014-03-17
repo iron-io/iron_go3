@@ -10,22 +10,17 @@ func TestBasic(t *testing.T) {
 	q := New("test_queue")
 	q.Clear()
 
-	total := 0
-
 	_, err := q.PushString("Hello, World!")
 	if err != nil {
 		t.Error("Unexpected error in pushing a message: ", err)
 	}
-	total++
 
 	// You can also pass multiple messages in a single call.
 	ids, err := q.PushStrings("Message 1", "Message 2")
 	if err != nil {
 		t.Error("Unexpected error in pushing a message: ", err)
 	}
-	if len(ids) == 2 {
-		total++
-	} else {
+	if len(ids) != 2 {
 		t.Error("Expected 2 id got: ", len(ids))
 	}
 
