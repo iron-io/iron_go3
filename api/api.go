@@ -66,25 +66,32 @@ func (u *URL) QueryAdd(key string, format string, value interface{}) *URL {
 	return u
 }
 
-func (u *URL) Req(method string, in, out interface{}) (err error) {
+func (u *URL) Req(method string, in, out interface{}) (error) {
 	var reqBody io.Reader
-	if in != nil {
+	if in == nil {
+		in = &map[string]string{}
+	}
 		data, err := json.Marshal(in)
 		if err != nil {
 			return err
 		}
 		reqBody = bytes.NewBuffer(data)
-	}
+	dbg("request body:", in)
+
 	response, err := u.Request(method, reqBody)
 	if response != nil {
 		defer response.Body.Close()
 	}
+	if err != nil {
+		dbg("ERROR!", err, err.Error())
+		return err
+	}
+	dbg("response:", response.Body)
 	if err == nil && out != nil {
 		err = json.NewDecoder(response.Body).Decode(out)
 		dbg("u:", u, "out:", fmt.Sprintf("%#v\n", out))
 	}
-
-	return
+	return nil
 }
 
 var MaxRequestRetries = 5

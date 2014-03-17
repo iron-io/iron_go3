@@ -174,7 +174,9 @@ func (q Queue) PushMessage(msg *Message) (id string, err error) {
 func (q Queue) PushMessages(msgs ...*Message) (ids []string, err error) {
 	in := struct {
 		Messages []*Message `json:"messages"`
-	}{Messages: msgs}
+	}{
+		Messages: msgs,
+	}
 
 	out := struct {
 		IDs []string `json:"ids"`
@@ -213,14 +215,18 @@ func (q Queue) GetN(n int) (msgs []*Message, err error) {
 }
 
 func (q Queue) GetNWithTimeout(n, timeout int) (msgs []*Message, err error) {
+	in := struct {
+		N       int `'json:"n"`
+		Timeout int `json:"timeout"`
+	}{
+		N: n,
+		Timeout: timeout,
+	}
 	out := struct {
 		Messages []*Message `json:"messages"`
 	}{}
 
-	err = q.queues(q.Name, "reservations").
-		QueryAdd("n", "%d", n).
-		QueryAdd("timeout", "%d", timeout).
-		Req("GET", nil, &out)
+	err = q.queues(q.Name, "reservations").Req("POST", &in, &out)
 	if err != nil {
 		return
 	}
