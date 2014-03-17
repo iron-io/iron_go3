@@ -1,121 +1,104 @@
 package mq
 
 import (
-//	"fmt"
-	"github.com/iron-io/iron_go3/api"
+	"fmt"
 	"testing"
-//	"time"
-
-	. "github.com/jeffh/go.bdd"
 )
 
-func TestEverything(t *testing.T) {}
+func TestBasic(t *testing.T) {
+	// use a queue named "test_queue" to push/get messages
+	q := New("test_queue")
+	q.Clear()
 
-func q(name string) *Queue {
-	c := New("queuename")
-	return c
+	total := 0
+
+	_, err := q.PushString("Hello, World!")
+	if err != nil {
+		t.Error("Unexpected error in pushing a message: ", err)
+	}
+	total++
+
+	// You can also pass multiple messages in a single call.
+	ids, err := q.PushStrings("Message 1", "Message 2")
+	if err != nil {
+		t.Error("Unexpected error in pushing a message: ", err)
+	}
+	if len(ids) == 2 {
+		total++
+	} else {
+		t.Error("Expected 2 id got: ", len(ids))
+	}
+
+	msgs, err := q.GetN(100)
+	if err != nil {
+		t.Error("Unexpected error while dequeueing", err)
+	}
+	if len(msgs) != 3 {
+		t.Error("Expected 3 got: ", len(msgs))
+	}
+	q.Clear()
 }
 
-func init() {
-	api.Debug = true
-	defer PrintSpecReport()
+func TestQueueSize(t *testing.T) {
+	q := New("queuename")
+	strings := []string{}
+	for n := 0; n < 100; n++ {
+		strings = append(strings, fmt.Sprint("test: ", n))
+	}
 
-	Describe("IronMQ", func() {
-		It("Deletes all existing messages", func() {
-			c := q("queuename")
+	ids, err := q.PushStrings(strings...)
+	info, err := q.Info()
+	if err != nil {
+		t.Error("Unexpected error in getting qinfo: ", err)
+	}
+	if info.Size != 100 {
+		t.Error("Expected 100 in size got: ", info.Size)
+	}
 
-			_, err := c.PushString("just a little test")
-			Expect(err, ToBeNil)
+	for i := 0; i < 10; i++ {
+		err := q.DeleteMessage(ids[i], "0")
+		if err != nil {
+			t.Error("Unexpected error while deleting message: ", err)
+		}
+	}
+	info, err = q.Info()
+	if err != nil {
+		t.Error("")
+	}
 
-			Expect(c.Clear(), ToBeNil)
+	msgs, err := q.GetN(90)
+	if err != nil {
+		t.Error("Unexpected error while getting message: ", err)
+	}
+	if len(msgs) != 90 {
+		t.Error("Expected to be able to pull 90 message got: ", len(msgs))
+	}
 
-			info, err := c.Info()
-			Expect(err, ToBeNil)
-			Expect(info.Size, ToEqual, 0x0)
-		})
+	for i := 0; i < 10; i++ {
+		err := q.DeleteMessage(msgs[i].Id, msgs[i].ReservationId)
+		if err != nil {
+			t.Error("Unexpected error while deleting message: ", err)
+		}
+	}
+	info, err = q.Info()
+	if err != nil {
+		t.Error("Unexpected error in getting qinfo: ", err)
+	}
 
-//		It("Pushes ands gets a message", func() {
-//			c := q("queuename")
-//			id1, err := c.PushString("just a little test")
-//			Expect(err, ToBeNil)
-//
-//			msg, err := c.Get()
-//			Expect(err, ToBeNil)
-//
-//			Expect(msg, ToNotBeNil)
-//			Expect(msg.Id, ToDeepEqual, id1)
-//			Expect(msg.Body, ToDeepEqual, "just a little test")
-//
-//			err = c.DeleteMessage(id1, msg.ReservationId)
-//			Expect(err, ToBeNil)
-//
-//		})
-//
-//		It("clears the queue", func() {
-//			q := q("queuename")
-//
-//			strings := []string{}
-//			for n := 0; n < 100; n++ {
-//				strings = append(strings, fmt.Sprint("test: ", n))
-//			}
-//
-//			_, err := q.PushStrings(strings...)
-//			Expect(err, ToBeNil)
-//
-//			info, err := q.Info()
-//			Expect(err, ToBeNil)
-//			Expect(info.Size, ToEqual, 100)
-//
-//			Expect(q.Clear(), ToBeNil)
-//
-//			info, err = q.Info()
-//			Expect(err, ToBeNil)
-//			Expect(info.Size, ToEqual, 0)
-//		})
-//
-//		It("Lists all queues", func() {
-//			c := q("queuename")
-//			queues, err := c.ListQueues(0, 100) // can't check the caches value just yet.
-//			Expect(err, ToBeNil)
-//			found := false
-//			for _, queue := range queues {
-//				if queue.Name == "queuename" {
-//					found = true
-//					break
-//				}
-//			}
-//			Expect(found, ToEqual, true)
-//		})
-//
-//		It("releases a message", func() {
-//			c := q("queuename")
-//
-//			id, err := c.PushString("trying")
-//			Expect(err, ToBeNil)
-//
-//			msg, err := c.Get()
-//			Expect(err, ToBeNil)
-//
-//			err = msg.Release(3)
-//			Expect(err, ToBeNil)
-//
-//			msg, err = c.Get()
-//			Expect(msg, ToEqual, nil)
-//
-//			time.Sleep(3)
-//
-//			msg, err = c.Get()
-//			Expect(err, ToBeNil)
-//			Expect(msg.Id, ToEqual, id)
-//		})
-//
-//		It("updates a queue", func() {
-//			c := q("pushqueue")
-//			info, err := c.Info()
-//			qi := QueueInfo{Push: PushInfo{Type: "multicast"}}
-//			rc, err := c.Update(qi)
-//			Expect(err, ToBeNil)
-//			Expect(info.Name, ToEqual, rc.Name)
-//		})
-	})
+	if info.Size != 80 {
+		t.Error("Expected 80 in size got: ", info.Size)
+	}
+
+	err = q.Clear()
+	if err != nil {
+		t.Error("Unexpected error in clearing queue", err)
+	}
+
+	info, err = q.Info()
+	if err != nil {
+		t.Error("Unexpected error in getting qinfo: ", err)
+	}
+	if info.Size != 0 {
+		t.Error("Expected 0 in size got: ", info.Size)
+	}
 }

@@ -220,7 +220,7 @@ func (q Queue) GetNWithTimeout(n, timeout int) (msgs []*Message, err error) {
 	err = q.queues(q.Name, "reservations").
 		QueryAdd("n", "%d", n).
 		QueryAdd("timeout", "%d", timeout).
-		Req("GET", nil, &out)
+		Req("POST", nil, &out)
 	if err != nil {
 		return
 	}
