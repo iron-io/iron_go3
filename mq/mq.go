@@ -2,7 +2,6 @@
 package mq
 
 import (
-	"errors"
 	"time"
 
 	"github.com/iron-io/iron_go3/api"
@@ -89,11 +88,9 @@ func New(queueName string) *Queue {
 
 func (q Queue) queues(s ...string) *api.URL { return api.Action(q.Settings, "queues", s...) }
 
-func (q Queue) ListQueues(previous string, perPage int) (queues []Queue, err error) {
-	out := []struct {
-		Id         string
-		Project_id string
-		Name       string
+func (q Queue) ListQueues(previous string, perPage int) (queues []QueueInfo, err error) {
+	out := struct {
+		Queues []QueueInfo `json:"queues"`
 	}{}
 
 	err = q.queues().
@@ -101,18 +98,18 @@ func (q Queue) ListQueues(previous string, perPage int) (queues []Queue, err err
 		QueryAdd("per_page", "%d", perPage).
 		Req("GET", nil, &out)
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	queues = make([]Queue, 0, len(out))
-	for _, item := range out {
-		queues = append(queues, Queue{
-			Settings: q.Settings,
-			Name:     item.Name,
-		})
-	}
+//	queues = make([]QueueInfo, 0, len(out))
+//	for _, item := range out {
+//		queues = append(queues, Queue{
+//			Settings: q.Settings,
+//			Name:     item.Name,
+//		})
+//	}
+	return out.Queues, nil
 
-	return
 }
 
 func (q Queue) Info() (QueueInfo, error) {
@@ -199,12 +196,9 @@ func (q Queue) Get() (msg *Message, err error) {
 	}
 
 	if len(msgs) > 0 {
-		msg = msgs[0]
-	} else {
-		err = errors.New("Couldn't get a single message")
+		return msgs[0], nil
 	}
-
-	return
+	return nil, nil
 }
 
 // get N messages
@@ -219,7 +213,7 @@ func (q Queue) GetNWithTimeout(n, timeout int) (msgs []*Message, err error) {
 		N       int `'json:"n"`
 		Timeout int `json:"timeout"`
 	}{
-		N: n,
+		N:       n,
 		Timeout: timeout,
 	}
 	out := struct {
