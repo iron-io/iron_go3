@@ -7,7 +7,6 @@ import (
 	"os"
 )
 
-
 var (
 	taskDirFlag string
 	payloadFlag string

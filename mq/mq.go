@@ -219,7 +219,7 @@ func (q Queue) GetNWithTimeout(n, timeout int) (msgs []*Message, err error) {
 		N       int `'json:"n"`
 		Timeout int `json:"timeout"`
 	}{
-		N: n,
+		N:       n,
 		Timeout: timeout,
 	}
 	out := struct {

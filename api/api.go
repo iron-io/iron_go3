@@ -66,16 +66,16 @@ func (u *URL) QueryAdd(key string, format string, value interface{}) *URL {
 	return u
 }
 
-func (u *URL) Req(method string, in, out interface{}) (error) {
+func (u *URL) Req(method string, in, out interface{}) error {
 	var reqBody io.Reader
 	if in == nil {
 		in = &map[string]string{}
 	}
-		data, err := json.Marshal(in)
-		if err != nil {
-			return err
-		}
-		reqBody = bytes.NewBuffer(data)
+	data, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+	reqBody = bytes.NewBuffer(data)
 	dbg("request body:", in)
 
 	response, err := u.Request(method, reqBody)
@@ -182,10 +182,10 @@ func ResponseAsError(response *http.Response) HTTPResponseError {
 	}
 
 	defer response.Body.Close()
-//	desc, found := HTTPErrorDescriptions[response.StatusCode]
-//	if found {
-//		return resErr{response: response, error: response.Status + ": " + desc}
-//	}
+	//	desc, found := HTTPErrorDescriptions[response.StatusCode]
+	//	if found {
+	//		return resErr{response: response, error: response.Status + ": " + desc}
+	//	}
 
 	out := map[string]interface{}{}
 	err := json.NewDecoder(response.Body).Decode(&out)
