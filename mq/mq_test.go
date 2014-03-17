@@ -115,6 +115,7 @@ func init() {
 
 			msg, err = c.Get()
 			Expect(err, ToBeNil)
+			Expect(msg, ToNotBeNil)
 			Expect(msg.Id, ToEqual, id)
 		})
 
