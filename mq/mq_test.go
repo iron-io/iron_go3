@@ -120,8 +120,12 @@ func init() {
 		})
 
 		It("updates a queue", func() {
-			c := q("pushqueue")
+			c := q("pushqueue" + time.Now().String())
+			fmt.Println(c)
+			_, err := c.PushString("Hello")
+			Expect(err, ToBeNil)
 			info, err := c.Info()
+			Expect(err, ToBeNil)
 			qi := QueueInfo{Push: PushInfo{Type: "multicast"}}
 			rc, err := c.Update(qi)
 			Expect(err, ToBeNil)
