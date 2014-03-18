@@ -3,14 +3,18 @@ package mq
 import (
 	"fmt"
 	"testing"
+	"time"
 )
 
 func TestBasic(t *testing.T) {
 	// use a queue named "test_queue" to push/get messages
 	q := New("test_queue")
-	q.Clear()
+	err := q.Clear()
+	if err != nil {
+		t.Error("Unexpected error in clearing a queue: ", err)
+	}
 
-	_, err := q.PushString("Hello, World!")
+	_, err = q.PushString("Hello, World!")
 	if err != nil {
 		t.Error("Unexpected error in pushing a message: ", err)
 	}
@@ -36,6 +40,7 @@ func TestBasic(t *testing.T) {
 
 func TestQueueSize(t *testing.T) {
 	q := New("queuename")
+	q.Clear()
 	strings := []string{}
 	for n := 0; n < 100; n++ {
 		strings = append(strings, fmt.Sprint("test: ", n))
@@ -95,5 +100,40 @@ func TestQueueSize(t *testing.T) {
 	}
 	if info.Size != 0 {
 		t.Error("Expected 0 in size got: ", info.Size)
+	}
+}
+
+func TestRelease(t *testing.T) {
+	q := New("queuename")
+
+	_, err := q.PushString("trying")
+	if err != nil {
+		t.Error("Unexpected error while pushing message: ", err)
+	}
+
+	msg, err := q.Get()
+	if err != nil {
+		t.Error("Unexpected error while getting message: ", err)
+	}
+
+	err = msg.Release(3)
+	if err != nil {
+		t.Error("Unexpected error while releasing message: ", err)
+	}
+	msg, err = q.Get()
+	if err != nil {
+		t.Error("Unexpected error while getting message: ", err)
+	}
+	if msg != nil {
+		t.Error("Should have not released message within delay: ", msg)
+	}
+
+	time.Sleep(4 * time.Second)
+	msg, err = q.Get()
+	if err != nil {
+		t.Error("Unexpected error while getting message: ", err)
+	}
+	if msg == nil {
+		t.Error("Should have released message: ", msg)
 	}
 }

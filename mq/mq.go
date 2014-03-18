@@ -101,13 +101,13 @@ func (q Queue) ListQueues(previous string, perPage int) (queues []QueueInfo, err
 		return nil, err
 	}
 
-//	queues = make([]QueueInfo, 0, len(out))
-//	for _, item := range out {
-//		queues = append(queues, Queue{
-//			Settings: q.Settings,
-//			Name:     item.Name,
-//		})
-//	}
+	//	queues = make([]QueueInfo, 0, len(out))
+	//	for _, item := range out {
+	//		queues = append(queues, Queue{
+	//			Settings: q.Settings,
+	//			Name:     item.Name,
+	//		})
+	//	}
 	return out.Queues, nil
 
 }
@@ -210,7 +210,7 @@ func (q Queue) GetN(n int) (msgs []*Message, err error) {
 
 func (q Queue) GetNWithTimeout(n, timeout int) (msgs []*Message, err error) {
 	in := struct {
-		N       int `'json:"n"`
+		N       int `json:"n"`
 		Timeout int `json:"timeout"`
 	}{
 		N:       n,
