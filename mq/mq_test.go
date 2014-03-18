@@ -111,7 +111,7 @@ func init() {
 			msg, err = c.Get()
 			Expect(msg, ToBeNil)
 
-			time.Sleep(4)
+			time.Sleep(4 * time.Second)
 
 			msg, err = c.Get()
 			Expect(err, ToBeNil)
