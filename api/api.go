@@ -97,8 +97,6 @@ func (u *URL) Req(method string, in, out interface{}) error {
 var MaxRequestRetries = 5
 
 func (u *URL) Request(method string, body io.Reader) (response *http.Response, err error) {
-	client := http.Client{}
-
 	var bodyBytes []byte
 	if body == nil {
 		bodyBytes = []byte{}
@@ -128,7 +126,7 @@ func (u *URL) Request(method string, body io.Reader) (response *http.Response, e
 
 	for tries := 0; tries <= MaxRequestRetries; tries++ {
 		request.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
-		response, err = client.Do(request)
+		response, err = http.DefaultClient.Do(request)
 		if err != nil {
 			if err == io.EOF {
 				continue

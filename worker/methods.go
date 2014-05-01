@@ -113,8 +113,6 @@ func (w *Worker) CodePackageList(page, perPage int) (codes []CodeInfo, err error
 
 // CodePackageUpload uploads a code package
 func (w *Worker) CodePackageUpload(code Code) (id string, err error) {
-	client := http.Client{}
-
 	body := &bytes.Buffer{}
 	mWriter := multipart.NewWriter(body)
 
@@ -165,7 +163,7 @@ func (w *Worker) CodePackageUpload(code Code) (id string, err error) {
 	req.Header.Set("User-Agent", w.Settings.UserAgent)
 
 	// dumpRequest(req) NOTE: never do this here, it breaks stuff
-	response, err := client.Do(req)
+	response, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return
 	}
