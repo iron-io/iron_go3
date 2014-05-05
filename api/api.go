@@ -15,7 +15,12 @@ import (
 	"time"
 
 	"github.com/iron-io/iron_go3/config"
+	"log"
 )
+
+type DefaultResponseBody struct {
+	Msg string `json:"msg"`
+}
 
 type URL struct {
 	URL      url.URL
@@ -80,16 +85,24 @@ func (u *URL) Req(method string, in, out interface{}) error {
 
 	response, err := u.Request(method, reqBody)
 	if response != nil {
-		defer response.Body.Close()
+		defer closeResponse(response)
 	}
 	if err != nil {
 		dbg("ERROR!", err, err.Error())
 		return err
 	}
 	dbg("response:", response.Body)
-	if err == nil && out != nil {
-		err = json.NewDecoder(response.Body).Decode(out)
-		dbg("u:", u, "out:", fmt.Sprintf("%#v\n", out))
+	if err == nil {
+		if out != nil {
+			err = json.NewDecoder(response.Body).Decode(out)
+			if err != nil {
+				return err
+			}
+			dbg("u:", u, "out:", fmt.Sprintf("%#v\n", out))
+		} else {
+			// throw it away
+			io.Copy(ioutil.Discard, response.Body)
+		}
 	}
 	return nil
 }
@@ -179,7 +192,8 @@ func ResponseAsError(response *http.Response) HTTPResponseError {
 		return nil
 	}
 
-	defer response.Body.Close()
+	defer closeResponse(response)
+
 	//	desc, found := HTTPErrorDescriptions[response.StatusCode]
 	//	if found {
 	//		return resErr{response: response, error: response.Status + ": " + desc}
@@ -195,6 +209,18 @@ func ResponseAsError(response *http.Response) HTTPResponseError {
 	}
 
 	return resErr{response: response, error: response.Status + ": Unknown API Response"}
+}
+
+func closeResponse(response *http.Response) error {
+	// ensure we read the entire body
+	bs, err2 := ioutil.ReadAll(response.Body)
+	if err2 != nil {
+		log.Println("Error during ReadAll!!", err2)
+	}
+	if len(bs) > 0 {
+		log.Println("Had to read some bytes, not good!", bs, string(bs))
+	}
+	return response.Body.Close()
 }
 
 type HTTPResponseError interface {
