@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -15,7 +16,6 @@ import (
 	"time"
 
 	"github.com/iron-io/iron_go3/config"
-	"log"
 )
 
 type DefaultResponseBody struct {

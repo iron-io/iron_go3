@@ -26,15 +26,16 @@ type QueueSubscriber struct {
 type QueueInfo struct {
 	Name string `json:"name,omitempty"`
 	Timestamped
-	Size          int      `json:"size,omitempty"`
-	ExpiresIn     int      `json:"expires_in,omitempty"`
-	TotalMessages int      `json:"total_messages,omitempty"`
-	Push          PushInfo `json:"push,omitempty"`
-	Alerts        []Alert  `json:"alerts,omitempty"`
+	Size              int      `json:"size,omitempty"`
+	MessageExpiration int      `json:"message_expiration,omitempty"`
+	MessageTimeout    int      `json:"message_timeout,omitempty"`
+	TotalMessages     int      `json:"total_messages,omitempty"`
+	Type              string   `json:"type"`
+	Push              PushInfo `json:"push,omitempty"`
+	Alerts            []Alert  `json:"alerts,omitempty"`
 }
 
 type PushInfo struct {
-	Type         string            `json:"type"`
 	RetriesDelay int               `json:"retries_delay,omitempty"`
 	Retries      int               `json:"retries,omitempty"`
 	Subscribers  []QueueSubscriber `json:"subscribers,omitempty"`
@@ -89,9 +90,9 @@ func New(queueName string) *Queue {
 func (q Queue) queues(s ...string) *api.URL { return api.Action(q.Settings, "queues", s...) }
 
 func (q Queue) ListQueues(previous string, perPage int) (queues []QueueInfo, err error) {
-	out := struct {
+	var out struct {
 		Queues []QueueInfo `json:"queues"`
-	}{}
+	}
 
 	err = q.queues().
 		QueryAdd("previous", "%v", previous).
@@ -101,33 +102,31 @@ func (q Queue) ListQueues(previous string, perPage int) (queues []QueueInfo, err
 		return nil, err
 	}
 
-	//	queues = make([]QueueInfo, 0, len(out))
-	//	for _, item := range out {
-	//		queues = append(queues, Queue{
-	//			Settings: q.Settings,
-	//			Name:     item.Name,
-	//		})
-	//	}
 	return out.Queues, nil
-
 }
 
 func (q Queue) Info() (QueueInfo, error) {
-	qi := QueueInfo{}
-	err := q.queues(q.Name).Req("GET", nil, &qi)
-	return qi, err
+	var out struct {
+		QI QueueInfo `json:"queue"`
+	}
+	err := q.queues(q.Name).Req("GET", nil, &out)
+	return out.QI, err
 }
 
 func (q Queue) Update(qi QueueInfo) (QueueInfo, error) {
-	out := QueueInfo{}
+	var out QueueInfo
 	err := q.queues(q.Name).Req("POST", qi, &out)
 	return out, err
 }
 
+func (q Queue) Delete() error {
+	return q.queues(q.Name).Req("DELETE", nil, nil)
+}
+
 func (q Queue) Subscribe(subscription Subscription, subscribers ...string) (err error) {
 	in := QueueInfo{
+		Type: subscription.PushType,
 		Push: PushInfo{
-			Type:         subscription.PushType,
 			Retries:      subscription.Retries,
 			RetriesDelay: subscription.RetriesDelay,
 			Subscribers:  make([]QueueSubscriber, len(subscribers)),
@@ -175,10 +174,10 @@ func (q Queue) PushMessages(msgs ...*Message) (ids []string, err error) {
 		Messages: msgs,
 	}
 
-	out := struct {
+	var out struct {
 		IDs []string `json:"ids"`
 		Msg string   `json:"msg"`
-	}{}
+	}
 
 	err = q.queues(q.Name, "messages").Req("POST", &in, &out)
 	return out.IDs, err
