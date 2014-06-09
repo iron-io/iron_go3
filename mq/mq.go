@@ -233,7 +233,7 @@ func (q Queue) GetNWithTimeout(n, timeout int) (msgs []*Message, err error) {
 
 // Delete all messages in the queue
 func (q Queue) Clear() (err error) {
-	return q.queues(q.Name, "messages").Req("DELETE", &struct{}{}, nil)
+	return q.queues(q.Name, "messages").Req("DELETE", nil, nil)
 }
 
 // Delete message from queue
