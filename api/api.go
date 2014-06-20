@@ -213,12 +213,14 @@ func ResponseAsError(response *http.Response) HTTPResponseError {
 
 func closeResponse(response *http.Response) error {
 	// ensure we read the entire body
-	bs, err2 := ioutil.ReadAll(response.Body)
-	if err2 != nil {
-		log.Println("Error during ReadAll!!", err2)
+	if response.Close {
+		return nil
 	}
-	if len(bs) > 0 {
-		log.Println("Had to read some bytes, not good!", bs, string(bs))
+	n, err := io.Copy(ioutil.Discard, response.Body)
+	if err != nil {
+		log.Println("Error during closeResponse!!", err)
+	} else if n > 0 {
+		log.Printf("Had to read %d bytes, not good!\n", n)
 	}
 	return response.Body.Close()
 }
