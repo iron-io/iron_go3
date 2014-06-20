@@ -113,20 +113,20 @@ func (q Queue) Info() (QueueInfo, error) {
 	return out.QI, err
 }
 
-func (q Queue) Create(qi QueueInfo) QueueInfo, error) {
-  var out struct {
-    QI QueueInfo `json:"queue"`
-  }
+func (q Queue) Create(qi QueueInfo) (QueueInfo, error) {
+	var out struct {
+		QI QueueInfo `json:"queue"`
+	}
 	err := q.queues(q.Name).Req("PUT", qi, &out)
-	return out, err
+	return out.QI, err
 }
 
 func (q Queue) Update(qi QueueInfo) (QueueInfo, error) {
 	var out struct {
-    QI QueueInfo `json:"queue"`
-  }
+		QI QueueInfo `json:"queue"`
+	}
 	err := q.queues(q.Name).Req("PATCH", qi, &out)
-	return out, err
+	return out.QI, err
 }
 
 func (q Queue) Delete() error {
