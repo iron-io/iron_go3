@@ -24,12 +24,12 @@ type QueueSubscriber struct {
 }
 
 type QueueInfo struct {
-	Name string `json:"name,omitempty"`
+	Name string `json:"name"`
 	Timestamped
-	Size              int      `json:"size,omitempty"`
-	MessageExpiration int      `json:"message_expiration,omitempty"`
-	MessageTimeout    int      `json:"message_timeout,omitempty"`
-	TotalMessages     int      `json:"total_messages,omitempty"`
+	Size              int      `json:"size"`
+	MessageExpiration int      `json:"message_expiration`
+	MessageTimeout    int      `json:"message_timeout"`
+	TotalMessages     int      `json:"total_messages"`
 	Type              string   `json:"type"`
 	Push              PushInfo `json:"push,omitempty"`
 	Alerts            []Alert  `json:"alerts,omitempty"`
@@ -113,9 +113,19 @@ func (q Queue) Info() (QueueInfo, error) {
 	return out.QI, err
 }
 
+func (q Queue) Create(qi QueueInfo) QueueInfo, error) {
+  var out struct {
+    QI QueueInfo `json:"queue"`
+  }
+	err := q.queues(q.Name).Req("PUT", qi, &out)
+	return out, err
+}
+
 func (q Queue) Update(qi QueueInfo) (QueueInfo, error) {
-	var out QueueInfo
-	err := q.queues(q.Name).Req("POST", qi, &out)
+	var out struct {
+    QI QueueInfo `json:"queue"`
+  }
+	err := q.queues(q.Name).Req("PATCH", qi, &out)
 	return out, err
 }
 
