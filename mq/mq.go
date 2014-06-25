@@ -2,6 +2,7 @@
 package mq
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/iron-io/iron_go3/api"
@@ -13,19 +14,17 @@ type Timestamped struct {
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 }
 
+// A Queue is the client's idea of a queue, sufficient for getting
+// information for the queue with given Name at the server configured
+// with Settings. See mq.New()
 type Queue struct {
-	Settings config.Settings
-	Name     string
+	Settings config.Settings `json:"-"`
+	Name     string          `json:"name"`
 }
 
-type QueueSubscriber struct {
-	URL     string            `json:"url"`
-	Headers map[string]string `json:"headers,omitempty"`
-}
-
+// When used for create/update, Size and TotalMessages will be omitted.
 type QueueInfo struct {
-	Name string `json:"name"`
-	Timestamped
+	Name              string   `json:"name"`
 	Size              int      `json:"size"`
 	MessageExpiration int      `json:"message_expiration`
 	MessageTimeout    int      `json:"message_timeout"`
@@ -42,6 +41,11 @@ type PushInfo struct {
 	ErrorQueue   string            `json:"error_queue,omitempty"`
 }
 
+type QueueSubscriber struct {
+	URL     string            `json:"url"`
+	Headers map[string]string `json:"headers,omitempty"` // HTTP headers
+}
+
 type Alert struct {
 	Type      string `json:"type"`
 	Trigger   int    `json:"trigger"`
@@ -50,14 +54,13 @@ type Alert struct {
 	Snooze    int    `json:"snooze"`
 }
 
+// Message is dual purpose, as it represents a returned message and also
+// can be used for creation. For creation, only Body and Delay are valid.
+// Delay will not be present in returned message.
 type Message struct {
-	Id string `json:"id,omitempty"`
-	Timestamped
-	Body string `json:"body"`
-	// Timeout is the amount of time in seconds allowed for processing the message.
-	Timeout int64 `json:"timeout,omitempty"`
-	// Delay is the amount of time in seconds to wait before adding the message to the queue.
-	Delay         int64     `json:"delay,omitempty"`
+	Id            string    `json:"id,omitempty"`
+	Body          string    `json:"body"`
+	Delay         int64     `json:"delay,omitempty"` // time in seconds to wait before enqueue, default 0
 	ReservedUntil time.Time `json:"reserved_until,omitempty"`
 	ReservedCount int       `json:"reserved_count,omitempty"`
 	ReservationId string    `json:"reservation_id,omitempty"`
@@ -83,21 +86,58 @@ type Subscription struct {
 	RetriesDelay int
 }
 
+func ErrQueueNotFound(err error) bool {
+	return err.Error() == "404 Not Found: Queue not found"
+}
+
+// New uses the configuration specified in an iron.json file or environment variables
+// to return a Queue object capable of acquiring information about or modifying the queue
+// specified by queueName.
 func New(queueName string) *Queue {
 	return &Queue{Settings: config.Config("iron_mq"), Name: queueName}
 }
 
-func (q Queue) queues(s ...string) *api.URL { return api.Action(q.Settings, "queues", s...) }
+// List will get a listQueues of all queues for the configured project, paginated 30 at a time.
+// For paging or filtering, see ListPage and Filter.
+func List() ([]*Queue, error) {
+	return listQueues("", "", 0)
+}
 
-func (q Queue) ListQueues(previous string, perPage int) (queues []QueueInfo, err error) {
+// ListPage is like List, but will allow specifying a page length and pagination.
+// To get the first page, let prev = "".
+// To get the second page, use the name of the last queue on the first page as "prev".
+func ListPage(prev string, perPage int) ([]*Queue, error) {
+	return listQueues("", prev, perPage)
+}
+
+// Filter is like List, but will only return queues with the specified prefix.
+func Filter(prefix string) ([]*Queue, error) {
+	return listQueues(prefix, "", 0)
+}
+
+// Like ListPage, but with an added filter.
+func FilterPage(prefix, prev string, perPage int) ([]*Queue, error) {
+	return listQueues(prefix, prev, perPage)
+}
+
+func listQueues(prefix, prev string, perPage int) ([]*Queue, error) {
 	var out struct {
-		Queues []QueueInfo `json:"queues"`
+		Queues []*Queue `json:"queues"`
 	}
 
-	err = q.queues().
-		QueryAdd("previous", "%v", previous).
-		QueryAdd("per_page", "%d", perPage).
-		Req("GET", nil, &out)
+	url := api.Action(config.Config("iron_mq"), "queues")
+
+	if prev != "" {
+		url.QueryAdd("previous", "%v", prev)
+	}
+	if prefix != "" {
+		url.QueryAdd("prefix", "%v", prefix)
+	}
+	if perPage != 0 {
+		url.QueryAdd("per_page", "%d", perPage)
+	}
+
+	err := url.Req("GET", nil, &out)
 	if err != nil {
 		return nil, err
 	}
@@ -105,6 +145,20 @@ func (q Queue) ListQueues(previous string, perPage int) (queues []QueueInfo, err
 	return out.Queues, nil
 }
 
+func (q Queue) queues(s ...string) *api.URL { return api.Action(q.Settings, "queues", s...) }
+
+func (q *Queue) UnmarshalJSON(data []byte) error {
+	var name struct {
+		Name string `json:"name"`
+	}
+	err := json.Unmarshal(data, &name)
+	q.Name = name.Name
+	q.Settings = config.Config("iron_mq") // TODO could maybe cache this in config, map[$PWD]config, if $PWD changes, update config
+	return err
+}
+
+// Will return information about a queue, could also be used to check existence.
+// TODO make QueueNotExist err
 func (q Queue) Info() (QueueInfo, error) {
 	var out struct {
 		QI QueueInfo `json:"queue"`
@@ -113,7 +167,9 @@ func (q Queue) Info() (QueueInfo, error) {
 	return out.QI, err
 }
 
-func (q Queue) Create(qi QueueInfo) (QueueInfo, error) {
+// Will create or update a queue, all QueueInfo fields are optional.
+// Queue type cannot be changed.
+func (q Queue) Upsert(qi QueueInfo) (QueueInfo, error) {
 	var out struct {
 		QI QueueInfo `json:"queue"`
 	}
@@ -121,32 +177,11 @@ func (q Queue) Create(qi QueueInfo) (QueueInfo, error) {
 	return out.QI, err
 }
 
-func (q Queue) Update(qi QueueInfo) (QueueInfo, error) {
-	var out struct {
-		QI QueueInfo `json:"queue"`
-	}
-	err := q.queues(q.Name).Req("PATCH", qi, &out)
-	return out.QI, err
-}
-
 func (q Queue) Delete() error {
 	return q.queues(q.Name).Req("DELETE", nil, nil)
 }
 
-func (q Queue) Subscribe(subscription Subscription, subscribers ...string) (err error) {
-	in := QueueInfo{
-		Type: subscription.PushType,
-		Push: PushInfo{
-			Retries:      subscription.Retries,
-			RetriesDelay: subscription.RetriesDelay,
-			Subscribers:  make([]QueueSubscriber, len(subscribers)),
-		}}
-	for i, subscriber := range subscribers {
-		in.Push.Subscribers[i].URL = subscriber
-	}
-	return q.queues(q.Name).Req("POST", &in, nil)
-}
-
+// PushString enqueues a message with body specified and no delay.
 func (q Queue) PushString(body string) (id string, err error) {
 	ids, err := q.PushStrings(body)
 	if err != nil {
@@ -155,42 +190,55 @@ func (q Queue) PushString(body string) (id string, err error) {
 	return ids[0], nil
 }
 
-// Push adds one or more messages to the end of the queue using IronMQ's defaults:
-//	timeout - 60 seconds
-//	delay - none
-//
-// Identical to PushMessages with Message{Timeout: 60, Delay: 0}
+// PushStrings enqueues messages with specified bodies and no delay.
 func (q Queue) PushStrings(bodies ...string) (ids []string, err error) {
-	msgs := make([]*Message, 0, len(bodies))
-	for _, body := range bodies {
-		msgs = append(msgs, &Message{Body: body})
+	msgs := make([]Message, len(bodies))
+	for i, body := range bodies {
+		msgs[i] = Message{Body: body}
 	}
 
 	return q.PushMessages(msgs...)
 }
 
-func (q Queue) PushMessage(msg *Message) (id string, err error) {
+// PushMessage enqueues a message.
+func (q Queue) PushMessage(msg Message) (id string, err error) {
 	ids, err := q.PushMessages(msg)
-	if err != nil {
-		return
-	}
-	return ids[0], nil
+	return ids[0], err
 }
 
-func (q Queue) PushMessages(msgs ...*Message) (ids []string, err error) {
+// PushMessages enqueues each message in order.
+func (q Queue) PushMessages(msgs ...Message) (ids []string, err error) {
 	in := struct {
-		Messages []*Message `json:"messages"`
+		Messages []Message `json:"messages"`
 	}{
 		Messages: msgs,
 	}
 
 	var out struct {
 		IDs []string `json:"ids"`
-		Msg string   `json:"msg"`
+		Msg string   `json:"msg"` // TODO get rid of this on server and here, too.
 	}
 
 	err = q.queues(q.Name, "messages").Req("POST", &in, &out)
 	return out.IDs, err
+}
+
+// Peek first 30 messages on queue.
+func (q Queue) Peek() ([]Message, error) {
+	return q.PeekN(30)
+}
+
+// Peek with N, max 100.
+func (q Queue) PeekN(n int) ([]Message, error) {
+	var out struct {
+		Messages []Message `json:"messages"`
+	}
+
+	err := q.queues(q.Name, "messages").
+		QueryAdd("n", "%d", n).
+		Req("GET", nil, &out)
+
+	return out.Messages, err
 }
 
 // Get reserves a message from the queue.
@@ -198,47 +246,67 @@ func (q Queue) PushMessages(msgs ...*Message) (ids []string, err error) {
 // expires. If the timeout expires before the message is deleted, the message
 // will be placed back onto the queue.
 // As a result, be sure to Delete a message after you're done with it.
-func (q Queue) Get() (msg *Message, err error) {
+func (q Queue) Get() (msg Message, err error) {
 	msgs, err := q.GetN(1)
-	if err != nil {
-		return
-	}
-
 	if len(msgs) > 0 {
-		return msgs[0], nil
+		msg = msgs[0]
 	}
-	return nil, nil
+	return msg, err
 }
 
-// get N messages
-func (q Queue) GetN(n int) (msgs []*Message, err error) {
-	msgs, err = q.GetNWithTimeout(n, 0)
-
-	return
+// GetN is Get for N.
+func (q Queue) GetN(n int) ([]Message, error) {
+	return q.LongPoll(n, 0, 0, false)
 }
 
-func (q Queue) GetNWithTimeout(n, timeout int) (msgs []*Message, err error) {
+// TODO deprecate for LongPoll?
+func (q Queue) GetNWithTimeout(n, timeout int) ([]Message, error) {
+	return q.LongPoll(n, timeout, 0, false)
+}
+
+// Pop will get and delete a message from the queue.
+func (q Queue) Pop() (msg Message, err error) {
+	msgs, err := q.PopN(1)
+	if len(msgs) > 0 {
+		msg = msgs[0]
+	}
+	return msg, err
+}
+
+// PopN is Pop for N.
+func (q Queue) PopN(n int) ([]Message, error) {
+	return q.LongPoll(n, 0, 0, true)
+}
+
+// LongPoll is the long form for Get, Pop, with all options available.
+// If wait = 0, then LongPoll is simply a get, otherwise, the server
+// will poll for n messages up to wait seconds (max 30).
+// If delete is specified, then each message will be deleted instead
+// of being put back onto the queue.
+func (q Queue) LongPoll(n, timeout, wait int, delete bool) ([]Message, error) {
 	in := struct {
-		N       int `json:"n"`
-		Timeout int `json:"timeout"`
+		N       int  `json:"n"`
+		Timeout int  `json:"timeout"`
+		Wait    int  `json:"wait"`
+		Delete  bool `json:"delete"`
 	}{
 		N:       n,
 		Timeout: timeout,
+		Wait:    wait,
+		Delete:  delete,
 	}
-	out := struct {
-		Messages []*Message `json:"messages"`
-	}{}
-
-	err = q.queues(q.Name, "reservations").Req("POST", &in, &out)
-	if err != nil {
-		return
+	var out struct {
+		Messages []Message `json:"messages"` // TODO don't think we need pointer here
 	}
 
+	err := q.queues(q.Name, "reservations").Req("POST", &in, &out)
+
+	// TODO there is a clever way to get rid of this
 	for _, msg := range out.Messages {
 		msg.q = q
 	}
 
-	return out.Messages, nil
+	return out.Messages, err
 }
 
 // Delete all messages in the queue
@@ -271,15 +339,31 @@ func (q Queue) ReleaseMessage(msgId, reservationId string, delay int64) (err err
 	return q.queues(q.Name, "messages", msgId, "release").Req("POST", &body, nil)
 }
 
-func (q Queue) MessageSubscribers(msgId string) ([]*Subscriber, error) {
+func (q Queue) MessageSubscribers(msgId string) ([]Subscriber, error) {
 	out := struct {
-		Subscribers []*Subscriber `json:"subscribers"`
+		Subscribers []Subscriber `json:"subscribers"`
 	}{}
 	err := q.queues(q.Name, "messages", msgId, "subscribers").Req("GET", nil, &out)
 	return out.Subscribers, err
 }
 
-func (q Queue) MessageSubscribersPollN(msgId string, n int) ([]*Subscriber, error) {
+// Subscribe can only be used by push queues.
+// TODO this needs fixing up. need POST/PUT/DELETE and wrong endpoint
+func (q Queue) Subscribe(subscription Subscription, subscribers ...string) (err error) {
+	in := QueueInfo{
+		Type: subscription.PushType,
+		Push: PushInfo{
+			Retries:      subscription.Retries,
+			RetriesDelay: subscription.RetriesDelay,
+			Subscribers:  make([]QueueSubscriber, len(subscribers)),
+		}}
+	for i, subscriber := range subscribers {
+		in.Push.Subscribers[i].URL = subscriber
+	}
+	return q.queues(q.Name).Req("POST", &in, nil)
+}
+
+func (q Queue) MessageSubscribersPollN(msgId string, n int) ([]Subscriber, error) {
 	subs, err := q.MessageSubscribers(msgId)
 	for {
 		time.Sleep(100 * time.Millisecond)
@@ -294,7 +378,7 @@ func (q Queue) MessageSubscribersPollN(msgId string, n int) ([]*Subscriber, erro
 	return subs, err
 }
 
-func actualPushStatus(subs []*Subscriber) bool {
+func actualPushStatus(subs []Subscriber) bool {
 	for _, sub := range subs {
 		if sub.Status == "queued" {
 			return false
