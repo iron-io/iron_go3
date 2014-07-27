@@ -302,8 +302,8 @@ func (q Queue) LongPoll(n, timeout, wait int, delete bool) ([]Message, error) {
 	err := q.queues(q.Name, "reservations").Req("POST", &in, &out)
 
 	// TODO there is a clever way to get rid of this
-	for _, msg := range out.Messages {
-		msg.q = q
+	for i, _ := range out.Messages {
+		out.Messages[i].q = q
 	}
 
 	return out.Messages, err
