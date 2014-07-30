@@ -97,6 +97,34 @@ func New(queueName string) Queue {
 	return Queue{Settings: config.Config("iron_mq"), Name: queueName}
 }
 
+// Will create a new queue, all fields are optional.
+// Queue type cannot be changed.
+func CreateQueue(queueName string, queueInfo QueueInfo, alerts []Alert, pushInfo PushInfo, subscribers ...string) (QueueInfo, error){
+	url := api.Action(config.Config("iron_mq"), "queues", queueName)
+
+	var in struct {
+			Queue QueueInfo `json:"queue"`
+		}
+	var out struct {
+			Queue QueueInfo `json:"queue"`
+		}
+
+	queue := QueueInfo{
+		MessageExpiration: queueInfo.MessageExpiration,
+		MessageTimeout:    queueInfo.MessageTimeout,
+		Type: queueInfo.Type,
+		Push: pushInfo,
+		Alerts: alerts,
+	}
+	queue.Push.Subscribers = make([]QueueSubscriber, len(subscribers))
+	for i, subscriber := range subscribers {
+		queue.Push.Subscribers[i].URL = subscriber
+	}
+	in.Queue = queue
+	err := url.Req("PUT", in, &out)
+	return out.Queue, err
+}
+
 // List will get a listQueues of all queues for the configured project, paginated 30 at a time.
 // For paging or filtering, see ListPage and Filter.
 func List() ([]Queue, error) {
@@ -169,11 +197,23 @@ func (q Queue) Info() (QueueInfo, error) {
 
 // Will create or update a queue, all QueueInfo fields are optional.
 // Queue type cannot be changed.
-func (q Queue) Upsert(qi QueueInfo) (QueueInfo, error) {
+func (q Queue)  Update(queueInfo QueueInfo, alerts []Alert, pushInfo PushInfo, subscribers ...string) (QueueInfo, error){
+
 	var out struct {
-		QI QueueInfo `json:"queue"`
+			QI QueueInfo `json:"queue"`
+		}
+	var in struct {
+			QI QueueInfo `json:"queue"`
+		}
+
+	queueInfo.Push = pushInfo
+	queueInfo.Alerts = alerts
+	queueInfo.Push.Subscribers = make([]QueueSubscriber, len(subscribers))
+	for i, subscriber := range subscribers {
+		queueInfo.Push.Subscribers[i].URL = subscriber
 	}
-	err := q.queues(q.Name).Req("PUT", qi, &out)
+	in.QI = queueInfo
+	err := q.queues(q.Name).Req("PATCH", in, &out)
 	return out.QI, err
 }
 
@@ -241,12 +281,13 @@ func (q Queue) PeekN(n int) ([]Message, error) {
 	return out.Messages, err
 }
 
-// Get reserves a message from the queue.
+// Reserves a message from the queue.
 // The message will not be deleted, but will be reserved until the timeout
 // expires. If the timeout expires before the message is deleted, the message
 // will be placed back onto the queue.
 // As a result, be sure to Delete a message after you're done with it.
-func (q Queue) Get() (msg Message, err error) {
+
+func (q Queue) Reserve() (msg Message, err error) {
 	msgs, err := q.GetN(1)
 	if len(msgs) > 0 {
 		msg = msgs[0]
@@ -254,9 +295,21 @@ func (q Queue) Get() (msg Message, err error) {
 	return msg, err
 }
 
+// ReserveN reserves multiple messages from the queue.
+func (q Queue) ReserveN(n int) ([]Message, error) {
+	return q.LongPoll(n, 60, 0, false)
+}
+
+// Get reserves a message from the queue.
+// Deprecated, use Reserve instead.
+func (q Queue) Get() (msg Message, err error) {
+	return q.Reserve()
+}
+
 // GetN is Get for N.
+// Deprecated, use ReserveN instead.
 func (q Queue) GetN(n int) ([]Message, error) {
-	return q.LongPoll(n, 0, 0, false)
+	return q.ReserveN(n)
 }
 
 // TODO deprecate for LongPoll?
@@ -322,6 +375,43 @@ func (q Queue) DeleteMessage(msgId, reservationId string) (err error) {
 	return q.queues(q.Name, "messages", msgId).Req("DELETE", body, nil)
 }
 
+// Delete multiple messages by id
+func (q Queue) DeleteMessages(ids []string) error {
+	values := make([]map[string]string, len(ids))
+
+	for i, val := range ids {
+		element := map[string]string{
+			"id": val,
+		}
+		values[i] = element
+	}
+	in := struct {
+		Ids []map[string]string `json:"ids"`
+		}{
+		Ids: values,
+	}
+	return q.queues(q.Name, "messages").Req("DELETE", in, nil)
+}
+
+// Delete multiple reserved messages from the queue
+func (q Queue) DeleteReservedMessages(messages []Message) error {
+	values := make([]map[string]string, len(messages))
+
+	for i, val := range messages {
+		element := map[string]string{
+			"id": val.Id,
+			"reservation_id": val.ReservationId,
+		}
+		values[i] = element
+	}
+	in := struct {
+			Ids []map[string]string `json:"ids"`
+		}{
+		Ids: values,
+	}
+	return q.queues(q.Name, "messages").Req("DELETE", in, nil)
+}
+
 // Reset timeout of message to keep it reserved
 func (q Queue) TouchMessage(msgId, reservationId string) (err error) {
 	body := map[string]string{
@@ -350,6 +440,9 @@ func (q Queue) MessageSubscribers(msgId string) ([]Subscriber, error) {
 // Subscribe can only be used by push queues.
 // TODO this needs fixing up. need POST/PUT/DELETE and wrong endpoint
 func (q Queue) Subscribe(subscription Subscription, subscribers ...string) (err error) {
+	var queue struct {
+			QI QueueInfo `json:"queue"`
+		}
 	in := QueueInfo{
 		Type: subscription.PushType,
 		Push: PushInfo{
@@ -360,7 +453,8 @@ func (q Queue) Subscribe(subscription Subscription, subscribers ...string) (err 
 	for i, subscriber := range subscribers {
 		in.Push.Subscribers[i].URL = subscriber
 	}
-	return q.queues(q.Name).Req("POST", &in, nil)
+    queue.QI = in
+	return q.queues(q.Name).Req("PATCH", &queue, nil)
 }
 
 func (q Queue) MessageSubscribersPollN(msgId string, n int) ([]Subscriber, error) {
@@ -376,6 +470,22 @@ func (q Queue) MessageSubscribersPollN(msgId string, n int) ([]Subscriber, error
 		}
 	}
 	return subs, err
+}
+
+func (q Queue) AddAlerts(alerts ...*Alert)(err error){
+	var queue struct {
+			QI QueueInfo `json:"queue"`
+		}
+	in := QueueInfo {
+		Alerts: make([]Alert, len(alerts)),
+	}
+
+	for i, alert := range alerts {
+		in.Alerts[i] = *alert
+	}
+	queue.QI = in
+
+	return q.queues(q.Name).Req("PATCH", &queue, nil)
 }
 
 func actualPushStatus(subs []Subscriber) bool {
