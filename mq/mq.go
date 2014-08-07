@@ -99,22 +99,22 @@ func New(queueName string) Queue {
 
 // Will create a new queue, all fields are optional.
 // Queue type cannot be changed.
-func CreateQueue(queueName string, queueInfo QueueInfo, alerts []Alert, pushInfo PushInfo, subscribers ...string) (QueueInfo, error){
+func CreateQueue(queueName string, queueInfo QueueInfo, alerts []Alert, pushInfo PushInfo, subscribers ...string) (QueueInfo, error) {
 	url := api.Action(config.Config("iron_mq"), "queues", queueName)
 
 	var in struct {
-			Queue QueueInfo `json:"queue"`
-		}
+		Queue QueueInfo `json:"queue"`
+	}
 	var out struct {
-			Queue QueueInfo `json:"queue"`
-		}
+		Queue QueueInfo `json:"queue"`
+	}
 
 	queue := QueueInfo{
 		MessageExpiration: queueInfo.MessageExpiration,
 		MessageTimeout:    queueInfo.MessageTimeout,
-		Type: queueInfo.Type,
-		Push: pushInfo,
-		Alerts: alerts,
+		Type:              queueInfo.Type,
+		Push:              pushInfo,
+		Alerts:            alerts,
 	}
 	queue.Push.Subscribers = make([]QueueSubscriber, len(subscribers))
 	for i, subscriber := range subscribers {
@@ -197,14 +197,14 @@ func (q Queue) Info() (QueueInfo, error) {
 
 // Will create or update a queue, all QueueInfo fields are optional.
 // Queue type cannot be changed.
-func (q Queue)  Update(queueInfo QueueInfo, alerts []Alert, pushInfo PushInfo, subscribers ...string) (QueueInfo, error){
+func (q Queue) Update(queueInfo QueueInfo, alerts []Alert, pushInfo PushInfo, subscribers ...string) (QueueInfo, error) {
 
 	var out struct {
-			QI QueueInfo `json:"queue"`
-		}
+		QI QueueInfo `json:"queue"`
+	}
 	var in struct {
-			QI QueueInfo `json:"queue"`
-		}
+		QI QueueInfo `json:"queue"`
+	}
 
 	queueInfo.Push = pushInfo
 	queueInfo.Alerts = alerts
@@ -387,7 +387,7 @@ func (q Queue) DeleteMessages(ids []string) error {
 	}
 	in := struct {
 		Ids []map[string]string `json:"ids"`
-		}{
+	}{
 		Ids: values,
 	}
 	return q.queues(q.Name, "messages").Req("DELETE", in, nil)
@@ -399,14 +399,14 @@ func (q Queue) DeleteReservedMessages(messages []Message) error {
 
 	for i, val := range messages {
 		element := map[string]string{
-			"id": val.Id,
+			"id":             val.Id,
 			"reservation_id": val.ReservationId,
 		}
 		values[i] = element
 	}
 	in := struct {
-			Ids []map[string]string `json:"ids"`
-		}{
+		Ids []map[string]string `json:"ids"`
+	}{
 		Ids: values,
 	}
 	return q.queues(q.Name, "messages").Req("DELETE", in, nil)
@@ -441,8 +441,8 @@ func (q Queue) MessageSubscribers(msgId string) ([]Subscriber, error) {
 // TODO this needs fixing up. need POST/PUT/DELETE and wrong endpoint
 func (q Queue) Subscribe(subscription Subscription, subscribers ...string) (err error) {
 	var queue struct {
-			QI QueueInfo `json:"queue"`
-		}
+		QI QueueInfo `json:"queue"`
+	}
 	in := QueueInfo{
 		Type: subscription.PushType,
 		Push: PushInfo{
@@ -453,7 +453,7 @@ func (q Queue) Subscribe(subscription Subscription, subscribers ...string) (err 
 	for i, subscriber := range subscribers {
 		in.Push.Subscribers[i].URL = subscriber
 	}
-    queue.QI = in
+	queue.QI = in
 	return q.queues(q.Name).Req("PATCH", &queue, nil)
 }
 
@@ -472,11 +472,11 @@ func (q Queue) MessageSubscribersPollN(msgId string, n int) ([]Subscriber, error
 	return subs, err
 }
 
-func (q Queue) AddAlerts(alerts ...*Alert)(err error){
+func (q Queue) AddAlerts(alerts ...*Alert) (err error) {
 	var queue struct {
-			QI QueueInfo `json:"queue"`
-		}
-	in := QueueInfo {
+		QI QueueInfo `json:"queue"`
+	}
+	in := QueueInfo{
 		Alerts: make([]Alert, len(alerts)),
 	}
 
