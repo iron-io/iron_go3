@@ -24,14 +24,16 @@ type Queue struct {
 
 // When used for create/update, Size and TotalMessages will be omitted.
 type QueueInfo struct {
-	Name              string   `json:"name"`
-	Size              int      `json:"size"`
-	MessageExpiration int      `json:"message_expiration`
-	MessageTimeout    int      `json:"message_timeout"`
-	TotalMessages     int      `json:"total_messages"`
-	Type              string   `json:"type"`
-	Push              PushInfo `json:"push,omitempty"`
-	Alerts            []Alert  `json:"alerts,omitempty"`
+	Name string `json:"name"`
+
+	Size          int `json:"size"`
+	TotalMessages int `json:"total_messages"`
+
+	MessageExpiration int       `json:"message_expiration`
+	MessageTimeout    int       `json:"message_timeout"`
+	Type              *string   `json:"type"`
+	Push              *PushInfo `json:"push,omitempty"`
+	Alerts            []Alert   `json:"alerts,omitempty"`
 }
 
 type PushInfo struct {
@@ -99,28 +101,19 @@ func New(queueName string) Queue {
 
 // Will create a new queue, all fields are optional.
 // Queue type cannot be changed.
-func CreateQueue(queueName string, queueInfo QueueInfo, alerts []Alert, pushInfo PushInfo, subscribers ...string) (QueueInfo, error) {
+func CreateQueue(queueName string, queueInfo QueueInfo) (QueueInfo, error) {
 	url := api.Action(config.Config("iron_mq"), "queues", queueName)
 
-	var in struct {
+	in := struct {
 		Queue QueueInfo `json:"queue"`
+	}{
+		Queue: queueInfo,
 	}
+
 	var out struct {
 		Queue QueueInfo `json:"queue"`
 	}
 
-	queue := QueueInfo{
-		MessageExpiration: queueInfo.MessageExpiration,
-		MessageTimeout:    queueInfo.MessageTimeout,
-		Type:              queueInfo.Type,
-		Push:              pushInfo,
-		Alerts:            alerts,
-	}
-	queue.Push.Subscribers = make([]QueueSubscriber, len(subscribers))
-	for i, subscriber := range subscribers {
-		queue.Push.Subscribers[i].URL = subscriber
-	}
-	in.Queue = queue
 	err := url.Req("PUT", in, &out)
 	return out.Queue, err
 }
@@ -197,22 +190,16 @@ func (q Queue) Info() (QueueInfo, error) {
 
 // Will create or update a queue, all QueueInfo fields are optional.
 // Queue type cannot be changed.
-func (q Queue) Update(queueInfo QueueInfo, alerts []Alert, pushInfo PushInfo, subscribers ...string) (QueueInfo, error) {
-
+func (q Queue) Update(queueInfo QueueInfo) (QueueInfo, error) {
 	var out struct {
 		QI QueueInfo `json:"queue"`
 	}
-	var in struct {
+	in := struct {
 		QI QueueInfo `json:"queue"`
+	}{
+		QI: queueInfo,
 	}
 
-	queueInfo.Push = pushInfo
-	queueInfo.Alerts = alerts
-	queueInfo.Push.Subscribers = make([]QueueSubscriber, len(subscribers))
-	for i, subscriber := range subscribers {
-		queueInfo.Push.Subscribers[i].URL = subscriber
-	}
-	in.QI = queueInfo
 	err := q.queues(q.Name).Req("PATCH", in, &out)
 	return out.QI, err
 }
@@ -444,8 +431,8 @@ func (q Queue) Subscribe(subscription Subscription, subscribers ...string) (err 
 		QI QueueInfo `json:"queue"`
 	}
 	in := QueueInfo{
-		Type: subscription.PushType,
-		Push: PushInfo{
+		Type: &subscription.PushType,
+		Push: &PushInfo{
 			Retries:      subscription.Retries,
 			RetriesDelay: subscription.RetriesDelay,
 			Subscribers:  make([]QueueSubscriber, len(subscribers)),
