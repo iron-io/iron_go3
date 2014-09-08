@@ -7,9 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"os"
 	"strings"
@@ -72,59 +70,51 @@ func (u *URL) QueryAdd(key string, format string, value interface{}) *URL {
 }
 
 func (u *URL) Req(method string, in, out interface{}) error {
-	var reqBody io.Reader
 	if in == nil {
-		in = &map[string]string{}
+		in = &struct{}{}
 	}
 	data, err := json.Marshal(in)
 	if err != nil {
 		return err
 	}
-	reqBody = bytes.NewBuffer(data)
 	dbg("request body:", in)
 
-	response, err := u.Request(method, reqBody)
-	if response != nil {
-		defer closeResponse(response)
+	response, err := u.req(method, data)
+	if response != nil && response.Body != nil {
+		defer response.Body.Close()
 	}
 	if err != nil {
 		dbg("ERROR!", err, err.Error())
 		return err
 	}
-	dbg("response:", response.Body)
-	if err == nil {
-		if out != nil {
-			err = json.NewDecoder(response.Body).Decode(out)
-			if err != nil {
-				return err
-			}
-			dbg("u:", u, "out:", fmt.Sprintf("%#v\n", out))
-		} else {
-			// throw it away
-			io.Copy(ioutil.Discard, response.Body)
-		}
+	dbg("response:", response)
+	if out != nil {
+		return json.NewDecoder(response.Body).Decode(out)
 	}
+
+	// throw it away
+	io.Copy(ioutil.Discard, response.Body)
 	return nil
+}
+
+// returned body must be closed by caller if non-nil
+func (u *URL) Request(method string, body io.Reader) (response *http.Response, err error) {
+	bytes, err := ioutil.ReadAll(body)
+	if err != nil {
+		return nil, err
+	}
+	return u.req(method, bytes)
 }
 
 var MaxRequestRetries = 5
 
-func (u *URL) Request(method string, body io.Reader) (response *http.Response, err error) {
-	var bodyBytes []byte
-	if body == nil {
-		bodyBytes = []byte{}
-	} else {
-		bodyBytes, err = ioutil.ReadAll(body)
-		if err != nil {
-			return nil, err
-		}
-	}
-
+func (u *URL) req(method string, body []byte) (response *http.Response, err error) {
 	request, err := http.NewRequest(method, u.URL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
 
+	request.ContentLength = int64(len(body))
 	request.Header.Set("Authorization", "OAuth "+u.Settings.Token)
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Accept-Encoding", "gzip/deflate")
@@ -137,14 +127,17 @@ func (u *URL) Request(method string, body io.Reader) (response *http.Response, e
 	dbg("URL:", request.URL.String())
 	dbg("request:", fmt.Sprintf("%#v\n", request))
 
-	for tries := 0; tries <= MaxRequestRetries; tries++ {
-		request.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+	for tries := 0; tries < MaxRequestRetries; tries++ {
+		request.Body = ioutil.NopCloser(bytes.NewReader(body)) // because Readers are only useful once
 		response, err = http.DefaultClient.Do(request)
 		if err != nil {
+			if response != nil && response.Body != nil {
+				response.Body.Close() // make sure to close since we won't return it
+			}
 			if err == io.EOF {
 				continue
 			}
-			return
+			return nil, err
 		}
 
 		if response.StatusCode == http.StatusServiceUnavailable {
@@ -156,28 +149,15 @@ func (u *URL) Request(method string, body io.Reader) (response *http.Response, e
 		break
 	}
 
-	// DumpResponse(response)
+	if err != nil { // for that one lucky case where io.EOF reaches MaxRetries
+		return nil, err
+	}
+
 	if err = ResponseAsError(response); err != nil {
-		return
+		return nil, err
 	}
 
-	return
-}
-
-func DumpRequest(req *http.Request) {
-	out, err := httputil.DumpRequestOut(req, true)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("%q\n", out)
-}
-
-func DumpResponse(response *http.Response) {
-	out, err := httputil.DumpResponse(response, true)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("%q\n", out)
+	return response, nil
 }
 
 var HTTPErrorDescriptions = map[int]string{
@@ -188,52 +168,39 @@ var HTTPErrorDescriptions = map[int]string{
 }
 
 func ResponseAsError(response *http.Response) HTTPResponseError {
-	if response.StatusCode == http.StatusOK {
+	if response.StatusCode == http.StatusOK || response.StatusCode == http.StatusCreated {
 		return nil
 	}
 
-	defer closeResponse(response)
+	if response == nil {
+		return resErr{statusCode: http.StatusTeapot, error: fmt.Sprint("response nil but no errors. beware unicorns, this shouldn't happen")}
+	}
 
-	//	desc, found := HTTPErrorDescriptions[response.StatusCode]
-	//	if found {
-	//		return resErr{response: response, error: response.Status + ": " + desc}
-	//	}
+	if response.Body != nil {
+		defer response.Body.Close()
+	}
 
-	out := map[string]interface{}{}
+	var out DefaultResponseBody
 	err := json.NewDecoder(response.Body).Decode(&out)
 	if err != nil {
-		return resErr{response: response, error: fmt.Sprint(response.Status, ": ", err.Error())}
+		return resErr{statusCode: response.StatusCode, error: fmt.Sprint(response.Status, ": ", err.Error())}
 	}
-	if msg, ok := out["msg"]; ok {
-		return resErr{response: response, error: fmt.Sprint(response.Status, ": ", msg)}
+	if out.Msg != "" {
+		return resErr{statusCode: response.StatusCode, error: fmt.Sprint(response.Status, ": ", out.Msg)}
 	}
 
-	return resErr{response: response, error: response.Status + ": Unknown API Response"}
-}
-
-func closeResponse(response *http.Response) error {
-	// ensure we read the entire body
-	if response.Close {
-		return nil
-	}
-	n, err := io.Copy(ioutil.Discard, response.Body)
-	if err != nil {
-		log.Println("Error during closeResponse!!", err)
-	} else if n > 0 {
-		log.Printf("Had to read %d bytes, not good!\n", n)
-	}
-	return response.Body.Close()
+	return resErr{statusCode: response.StatusCode, error: response.Status + ": Unknown API Response"}
 }
 
 type HTTPResponseError interface {
 	Error() string
-	Response() *http.Response
+	StatusCode() int
 }
 
 type resErr struct {
-	error    string
-	response *http.Response
+	error      string
+	statusCode int
 }
 
-func (h resErr) Error() string            { return h.error }
-func (h resErr) Response() *http.Response { return h.response }
+func (h resErr) Error() string   { return h.error }
+func (h resErr) StatusCode() int { return h.statusCode }

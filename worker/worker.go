@@ -141,7 +141,7 @@ func (w *Worker) WaitForTaskLog(taskId string) chan []byte {
 			log, err := w.TaskLog(taskId)
 			if err != nil {
 				e, ok := err.(api.HTTPResponseError)
-				if ok && e.Response().StatusCode == 404 {
+				if ok && e.StatusCode() == 404 {
 					retryDelay = sleepBetweenRetries(retryDelay)
 					time.Sleep(retryDelay)
 					continue
