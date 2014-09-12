@@ -27,6 +27,10 @@ type URL struct {
 
 var (
 	Debug bool
+
+	// HttpClient is the client used by iron_go to make each http request. It is exported in case
+	// the client would like to modify it from the default behavior from http.DefaultClient.
+	HttpClient = &http.Client{}
 )
 
 func dbg(v ...interface{}) {
@@ -129,7 +133,7 @@ func (u *URL) req(method string, body []byte) (response *http.Response, err erro
 
 	for tries := 0; tries < MaxRequestRetries; tries++ {
 		request.Body = ioutil.NopCloser(bytes.NewReader(body)) // because Readers are only useful once
-		response, err = http.DefaultClient.Do(request)
+		response, err = HttpClient.Do(request)
 		if err != nil {
 			if response != nil && response.Body != nil {
 				response.Body.Close() // make sure to close since we won't return it
