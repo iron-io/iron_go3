@@ -46,6 +46,19 @@ import "github.com/iron-io/iron_go3/mq"
 queue := mq.New("test_queue");
 ```
 
+Or use initializer with settings specified in code:
+
+```go
+settings := &config.Settings {
+	Token: "l504pLkINUWYDSO9YW4m",
+	ProjectId: "53ec6fc95e8edd2884000003",
+	Host: "localhost",
+	Scheme: "http",
+	Port: 8080,
+}
+queue := mq.ConfigNew("test_queue", settings);
+```
+
 Push queues must be explicitly created. There's no changing a queue's type.
 
 ```go
