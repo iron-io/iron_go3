@@ -103,7 +103,7 @@ func New(queueName string) Queue {
 // environment variables to return a Queue object capable of acquiring information about or 
 // modifying the queue specified by queueName.
 func ConfigNew(queueName string, settings *config.Settings) Queue {
-	return Queue{Settings: config.ConfigManually("iron_mq", settings), Name: queueName}
+	return Queue{Settings: config.ManualConfig("iron_mq", settings), Name: queueName}
 }
 
 // Will create a new queue, all fields are optional.

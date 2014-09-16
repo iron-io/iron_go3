@@ -56,7 +56,7 @@ settings := &config.Settings {
 	Scheme: "http",
 	Port: 8080,
 }
-queue := mq.New("test_queue", settings);
+queue := mq.ConfigNew("test_queue", settings);
 ```
 
 Push queues must be explicitly created. There's no changing a queue's type.

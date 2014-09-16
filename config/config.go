@@ -59,10 +59,10 @@ func dbg(v ...interface{}) {
 	}
 }
 
-// Config gathers configuration from env variables and json config files.
+// ManualConfig gathers configuration from env variables and json config files.
 // Examples of fullProduct are "iron_worker", "iron_cache", "iron_mq" and
 // finally overwrites it with specified instance of Settings.
-func ConfigManually(fullProduct string, configuration *Settings) (settings Settings) {
+func ManualConfig(fullProduct string, configuration *Settings) (settings Settings) {
 	if os.Getenv("IRON_CONFIG_DEBUG") != "" {
 		debug = true
 		dbg("debugging of config enabled")
@@ -97,7 +97,7 @@ func ConfigManually(fullProduct string, configuration *Settings) (settings Setti
 // Config gathers configuration from env variables and json config files.
 // Examples of fullProduct are "iron_worker", "iron_cache", "iron_mq".
 func Config(fullProduct string) (settings Settings) {
-	return ConfigManually(fullProduct, nil)
+	return ManualConfig(fullProduct, nil)
 }
 
 func (s *Settings) globalConfig(family, product string) {
@@ -130,7 +130,7 @@ func (s *Settings) localConfig(family, product string) {
 }
 
 func (s *Settings) manualConfig(settings *Settings) {
-	if (settings != nil) {
+	if settings != nil {
 		s.UseSettings(settings)
 	}
 }
