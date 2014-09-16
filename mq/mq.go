@@ -99,6 +99,13 @@ func New(queueName string) Queue {
 	return Queue{Settings: config.Config("iron_mq"), Name: queueName}
 }
 
+// ConfigNew uses the specified settings over configuration specified in an iron.json file or 
+// environment variables to return a Queue object capable of acquiring information about or 
+// modifying the queue specified by queueName.
+func ConfigNew(queueName string, settings *config.Settings) Queue {
+	return Queue{Settings: config.ConfigManually("iron_mq", settings), Name: queueName}
+}
+
 // Will create a new queue, all fields are optional.
 // Queue type cannot be changed.
 func CreateQueue(queueName string, queueInfo QueueInfo) (QueueInfo, error) {
