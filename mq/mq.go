@@ -99,8 +99,8 @@ func New(queueName string) Queue {
 	return Queue{Settings: config.Config("iron_mq"), Name: queueName}
 }
 
-// ConfigNew uses the specified settings over configuration specified in an iron.json file or 
-// environment variables to return a Queue object capable of acquiring information about or 
+// ConfigNew uses the specified settings over configuration specified in an iron.json file or
+// environment variables to return a Queue object capable of acquiring information about or
 // modifying the queue specified by queueName.
 func ConfigNew(queueName string, settings *config.Settings) Queue {
 	return Queue{Settings: config.ManualConfig("iron_mq", settings), Name: queueName}
@@ -281,12 +281,12 @@ func (q Queue) PeekN(n int) ([]Message, error) {
 // will be placed back onto the queue.
 // As a result, be sure to Delete a message after you're done with it.
 
-func (q Queue) Reserve() (msg Message, err error) {
+func (q Queue) Reserve() (msg *Message, err error) {
 	msgs, err := q.GetN(1)
 	if len(msgs) > 0 {
-		msg = msgs[0]
+		return &msgs[0], err
 	}
-	return msg, err
+	return nil, err
 }
 
 // ReserveN reserves multiple messages from the queue.
@@ -296,7 +296,7 @@ func (q Queue) ReserveN(n int) ([]Message, error) {
 
 // Get reserves a message from the queue.
 // Deprecated, use Reserve instead.
-func (q Queue) Get() (msg Message, err error) {
+func (q Queue) Get() (msg *Message, err error) {
 	return q.Reserve()
 }
 
