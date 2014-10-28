@@ -44,6 +44,7 @@ type PushInfo struct {
 }
 
 type QueueSubscriber struct {
+	Name    string            `json:"name"`
 	URL     string            `json:"url"`
 	Headers map[string]string `json:"headers,omitempty"` // HTTP headers
 }
@@ -449,6 +450,24 @@ func (q Queue) Subscribe(subscription Subscription, subscribers ...string) (err 
 	}
 	queue.QI = in
 	return q.queues(q.Name).Req("PATCH", &queue, nil)
+}
+
+func (q Queue) AddSubscribers(subscribers ...QueueSubscriber) error {
+	collection := struct {
+		Subscribers  []QueueSubscriber `json:"subscribers,omitempty"`
+	}{
+		Subscribers: subscribers,
+	}
+	return q.queues(q.Name, "subscribers").Req("POST", &collection, nil)
+}
+
+func (q Queue) ReplaceSubscribers(subscribers ...QueueSubscriber) error {
+	collection := struct {
+		Subscribers  []QueueSubscriber `json:"subscribers,omitempty"`
+	}{
+		Subscribers: subscribers,
+	}
+	return q.queues(q.Name, "subscribers").Req("PUT", &collection, nil)
 }
 
 func (q Queue) MessageSubscribersPollN(msgId string, n int) ([]Subscriber, error) {
