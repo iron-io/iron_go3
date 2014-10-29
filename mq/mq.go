@@ -454,7 +454,7 @@ func (q Queue) Subscribe(subscription Subscription, subscribers ...string) (err 
 
 func (q Queue) AddSubscribers(subscribers ...QueueSubscriber) error {
 	collection := struct {
-		Subscribers  []QueueSubscriber `json:"subscribers,omitempty"`
+		Subscribers []QueueSubscriber `json:"subscribers,omitempty"`
 	}{
 		Subscribers: subscribers,
 	}
@@ -463,11 +463,28 @@ func (q Queue) AddSubscribers(subscribers ...QueueSubscriber) error {
 
 func (q Queue) ReplaceSubscribers(subscribers ...QueueSubscriber) error {
 	collection := struct {
-		Subscribers  []QueueSubscriber `json:"subscribers,omitempty"`
+		Subscribers []QueueSubscriber `json:"subscribers,omitempty"`
 	}{
 		Subscribers: subscribers,
 	}
 	return q.queues(q.Name, "subscribers").Req("PUT", &collection, nil)
+}
+
+func (q Queue) RemoveSubscribers(subscribers ...string) error {
+	collection := make([]QueueSubscriber, len(subscribers))
+	for i, subscriber := range subscribers {
+		collection[i].Name = subscriber
+	}
+	return q.RemoveSubscribersCollection(collection...)
+}
+
+func (q Queue) RemoveSubscribersCollection(subscribers ...QueueSubscriber) error {
+	collection := struct {
+		Subscribers []QueueSubscriber `json:"subscribers,omitempty"`
+	}{
+		Subscribers: subscribers,
+	}
+	return q.queues(q.Name, "subscribers").Req("DELETE", &collection, nil)
 }
 
 func (q Queue) MessageSubscribersPollN(msgId string, n int) ([]Subscriber, error) {
