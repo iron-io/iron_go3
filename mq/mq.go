@@ -44,6 +44,7 @@ type PushInfo struct {
 }
 
 type QueueSubscriber struct {
+	Name    string            `json:"name"`
 	URL     string            `json:"url"`
 	Headers map[string]string `json:"headers,omitempty"` // HTTP headers
 }
@@ -431,24 +432,39 @@ func (q Queue) MessageSubscribers(msgId string) ([]Subscriber, error) {
 	return out.Subscribers, err
 }
 
-// Subscribe can only be used by push queues.
-// TODO this needs fixing up. need POST/PUT/DELETE and wrong endpoint
-func (q Queue) Subscribe(subscription Subscription, subscribers ...string) (err error) {
-	var queue struct {
-		QI QueueInfo `json:"queue"`
+func (q Queue) AddSubscribers(subscribers ...QueueSubscriber) error {
+	collection := struct {
+		Subscribers []QueueSubscriber `json:"subscribers,omitempty"`
+	}{
+		Subscribers: subscribers,
 	}
-	in := QueueInfo{
-		Type: &subscription.PushType,
-		Push: &PushInfo{
-			Retries:      subscription.Retries,
-			RetriesDelay: subscription.RetriesDelay,
-			Subscribers:  make([]QueueSubscriber, len(subscribers)),
-		}}
+	return q.queues(q.Name, "subscribers").Req("POST", &collection, nil)
+}
+
+func (q Queue) ReplaceSubscribers(subscribers ...QueueSubscriber) error {
+	collection := struct {
+		Subscribers []QueueSubscriber `json:"subscribers,omitempty"`
+	}{
+		Subscribers: subscribers,
+	}
+	return q.queues(q.Name, "subscribers").Req("PUT", &collection, nil)
+}
+
+func (q Queue) RemoveSubscribers(subscribers ...string) error {
+	collection := make([]QueueSubscriber, len(subscribers))
 	for i, subscriber := range subscribers {
-		in.Push.Subscribers[i].URL = subscriber
+		collection[i].Name = subscriber
 	}
-	queue.QI = in
-	return q.queues(q.Name).Req("PATCH", &queue, nil)
+	return q.RemoveSubscribersCollection(collection...)
+}
+
+func (q Queue) RemoveSubscribersCollection(subscribers ...QueueSubscriber) error {
+	collection := struct {
+		Subscribers []QueueSubscriber `json:"subscribers,omitempty"`
+	}{
+		Subscribers: subscribers,
+	}
+	return q.queues(q.Name, "subscribers").Req("DELETE", &collection, nil)
 }
 
 func (q Queue) MessageSubscribersPollN(msgId string, n int) ([]Subscriber, error) {
