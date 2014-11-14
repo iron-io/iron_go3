@@ -409,12 +409,21 @@ func (q Queue) DeleteReservedMessages(messages []Message) error {
 
 // Reset timeout of message to keep it reserved
 func (q Queue) TouchMessage(msgId, reservationId string) (string, error) {
-	body := map[string]string{
-		"reservation_id": reservationId,
+	return q.TouchMessageFor(msgId, reservationId, 0)
+}
+
+// Reset timeout of message to keep it reserved
+func (q Queue) TouchMessageFor(msgId, reservationId string, timeout int) (string, error) {
+	in := struct {
+		Timeout       int    `json:"timeout,omitempty"`
+		ReservationId string `json:"reservation_id,omitempty"`
+	}{ReservationId: reservationId}
+	if (timeout > 0) {
+		in.Timeout = timeout
 	}
-	message := &Message{}
-	err := q.queues(q.Name, "messages", msgId, "touch").Req("POST", body, message)
-	return message.ReservationId, err
+	out := &Message{}
+	err := q.queues(q.Name, "messages", msgId, "touch").Req("POST", in, out)
+	return out.ReservationId, err
 }
 
 // Put message back in the queue, message will be available after +delay+ seconds.
@@ -517,7 +526,12 @@ func (m Message) Delete() (err error) {
 
 // Reset timeout of message to keep it reserved
 func (m *Message) Touch() (err error) {
-	reservationId, error := m.q.TouchMessage(m.Id, m.ReservationId)
+	return m.TouchFor(0)
+}
+
+// Reset timeout of message to keep it reserved
+func (m *Message) TouchFor(timeout int) (err error) {
+	reservationId, error := m.q.TouchMessageFor(m.Id, m.ReservationId, timeout)
 	m.ReservationId = reservationId
 	return error
 }
