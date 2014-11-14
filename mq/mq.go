@@ -418,7 +418,7 @@ func (q Queue) TouchMessageFor(msgId, reservationId string, timeout int) (string
 		Timeout       int    `json:"timeout,omitempty"`
 		ReservationId string `json:"reservation_id,omitempty"`
 	}{ReservationId: reservationId}
-	if (timeout > 0) {
+	if timeout > 0 {
 		in.Timeout = timeout
 	}
 	out := &Message{}

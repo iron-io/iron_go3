@@ -280,13 +280,26 @@ Touching a reserved message extends its timeout by the duration specified when t
 
 ```go
 msg, _ := q.Reserve()
-err := msg.Touch()
+err := msg.Touch() // new reservation id will be assigned to current message
 ```
 
 There is another way to touch a message without getting it:
 
 ```go
-err := q.TouchMessage("5987586196292186572")
+newReservationId, err := q.TouchMessage(messageId, reservationId)
+```
+
+#### Specifiying timeout
+
+```go
+msg, _ := q.Reserve()
+err := msg.TouchFor(10) // new reservation id will be assigned to current message
+```
+
+or
+
+```go
+newReservationId, err := q.TouchMessageFor(messageId, reservationId, 10)
 ```
 
 --
