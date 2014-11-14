@@ -408,13 +408,13 @@ func (q Queue) DeleteReservedMessages(messages []Message) error {
 }
 
 // Reset timeout of message to keep it reserved
-func (q Queue) TouchMessage(msgId, reservationId string) (*Message, error) {
+func (q Queue) TouchMessage(msgId, reservationId string) (string, error) {
 	body := map[string]string{
 		"reservation_id": reservationId,
 	}
 	message := &Message{}
 	err := q.queues(q.Name, "messages", msgId, "touch").Req("POST", body, message)
-	return message, err
+	return message.ReservationId, err
 }
 
 // Put message back in the queue, message will be available after +delay+ seconds.
@@ -517,8 +517,8 @@ func (m Message) Delete() (err error) {
 
 // Reset timeout of message to keep it reserved
 func (m *Message) Touch() (err error) {
-	messageInfo, error := m.q.TouchMessage(m.Id, m.ReservationId)
-	m.ReservationId = messageInfo.ReservationId
+	reservationId, error := m.q.TouchMessage(m.Id, m.ReservationId)
+	m.ReservationId = reservationId
 	return error
 }
 
