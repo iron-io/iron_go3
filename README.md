@@ -475,17 +475,23 @@ Subscribers can be any HTTP endpoint. `push_type` is one of:
 * `multicast`: will push to all endpoints/subscribers
 * `unicast`: will push to one and only one endpoint/subscriber
 
+Subscribers could be added only to push queue (unicast or multicast). It's possible to set it while creating a queue:
+
 ```go
-subscription := mq.Subscription {
-	PushType: "multicast",
-	Retries:  3,
-	RetriesDelay: 60,
+queueType := "multicast"
+subscribers := []mq.QueueSubscriber{
+	mq.QueueSubscriber{Name: "test3", URL: "http://mysterious-brook-1807.herokuapp.com/ironmq_push_3"},
+	mq.QueueSubscriber{Name: "test4", URL: "http://mysterious-brook-1807.herokuapp.com/ironmq_push_4"},
 }
-err := q.Subscribe(
-	subscription, 
-	"http://mysterious-brook-1807.herokuapp.com/ironmq_push_3", 
-	"http://mysterious-brook-1807.herokuapp.com/ironmq_push_4")
+pushInfo := mq.PushInfo{RetriesDelay: 45, Retries: 2, Subscribers: subscribers}
+info, err := mq.CreateQueue(qn, mq.QueueInfo{Type: &queueType, Push: &pushInfo})
 ```
+
+It's also possible to manage subscribers for existing push queue using the following methods:
+
+* `AddSubscribers` - adds subscribers and replaces existing (if name of old one is equal to name of new one)
+* `ReplaceSubscribers` - adds new collection of subscribers instead of existing
+* `RemoveSubscribers` and `RemoveSubscribersCollection` - remove specified subscribers
 
 --
 
