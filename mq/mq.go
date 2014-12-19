@@ -3,6 +3,7 @@ package mq
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/iron-io/iron_go3/api"
@@ -238,6 +239,11 @@ func (q Queue) PushStrings(bodies ...string) (ids []string, err error) {
 // PushMessage enqueues a message.
 func (q Queue) PushMessage(msg Message) (id string, err error) {
 	ids, err := q.PushMessages(msg)
+	if err != nil {
+		return "", err
+	} else if len(ids) < 1 {
+		return "", errors.New("didn't receive message ID for pushing message")
+	}
 	return ids[0], err
 }
 
