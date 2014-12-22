@@ -26,7 +26,8 @@ type URL struct {
 }
 
 var (
-	Debug bool
+	Debug         bool
+	DebugOnErrors bool
 
 	// HttpClient is the client used by iron_go to make each http request. It is exported in case
 	// the client would like to modify it from the default behavior from http.DefaultClient.
@@ -39,10 +40,20 @@ func dbg(v ...interface{}) {
 	}
 }
 
+func dbgerr(v ...interface{}) {
+	if DebugOnErrors && !Debug {
+		fmt.Fprintln(os.Stderr, v...)
+	}
+}
+
 func init() {
 	if os.Getenv("IRON_API_DEBUG") != "" {
 		Debug = true
 		dbg("debugging of api enabled")
+	}
+	if os.Getenv("IRON_API_DEBUG_ON_ERRORS") != "" {
+		DebugOnErrors = true
+		dbg("debugging of api on errors enabled")
 	}
 }
 
@@ -89,6 +100,12 @@ func (u *URL) Req(method string, in, out interface{}) error {
 	}
 	if err != nil {
 		dbg("ERROR!", err, err.Error())
+		body := "<empty>"
+		if response != nil && response.Body != nil {
+			binary, _ := ioutil.ReadAll(response.Body)
+			body = string(binary)
+		}
+		dbgerr("ERROR!", err, err.Error(), "Request:", string(data), " Response:", body)
 		return err
 	}
 	dbg("response:", response)
