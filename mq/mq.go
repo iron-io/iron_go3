@@ -111,7 +111,19 @@ func ConfigNew(queueName string, settings *config.Settings) Queue {
 // Will create a new queue, all fields are optional.
 // Queue type cannot be changed.
 func CreateQueue(queueName string, queueInfo QueueInfo) (QueueInfo, error) {
-	url := api.Action(config.Config("iron_mq"), "queues", queueName)
+	info := queueInfo
+	info.Name = queueName
+	return ConfigCreateQueue(info, nil)
+}
+
+// Will create a new queue, all fields are optional.
+// Queue type cannot be changed.
+func ConfigCreateQueue(queueInfo QueueInfo, settings *config.Settings) (QueueInfo, error) {
+	if queueInfo.Name == "" {
+		return QueueInfo{}, errors.New("Name of queue is empty")
+	}
+
+	url := api.Action(config.ManualConfig("iron_mq", settings), "queues", queueInfo.Name)
 
 	in := struct {
 		Queue QueueInfo `json:"queue"`
