@@ -30,7 +30,7 @@ type QueueInfo struct {
 	Size          int `json:"size"`
 	TotalMessages int `json:"total_messages"`
 
-	MessageExpiration int       `json:"message_expiration`
+	MessageExpiration int       `json:"message_expiration"`
 	MessageTimeout    int       `json:"message_timeout"`
 	Type              *string   `json:"type"`
 	Push              *PushInfo `json:"push,omitempty"`
