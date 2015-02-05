@@ -291,6 +291,11 @@ func (q Queue) PeekN(n int) ([]Message, error) {
 		QueryAdd("n", "%d", n).
 		Req("GET", nil, &out)
 
+	// TODO there is a clever way to get rid of this
+	for i, _ := range out.Messages {
+		out.Messages[i].q = q
+	}
+
 	return out.Messages, err
 }
 
