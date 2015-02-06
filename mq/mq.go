@@ -291,7 +291,6 @@ func (q Queue) PeekN(n int) ([]Message, error) {
 		QueryAdd("n", "%d", n).
 		Req("GET", nil, &out)
 
-	// TODO there is a clever way to get rid of this
 	for i, _ := range out.Messages {
 		out.Messages[i].q = q
 	}
@@ -372,7 +371,6 @@ func (q Queue) LongPoll(n, timeout, wait int, delete bool) ([]Message, error) {
 
 	err := q.queues(q.Name, "reservations").Req("POST", &in, &out)
 
-	// TODO there is a clever way to get rid of this
 	for i, _ := range out.Messages {
 		out.Messages[i].q = q
 	}
