@@ -42,6 +42,7 @@ var (
 				Timeout:   30 * time.Second,
 				KeepAlive: 30 * time.Second,
 			}).Dial,
+			MaxIdleConnsPerHost: 512,
 			TLSHandshakeTimeout: 10 * time.Second,
 			TLSClientConfig: &tls.Config{
 				ClientSessionCache: tls.NewLRUClientSessionCache(DefaultCacheSize),
