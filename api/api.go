@@ -3,10 +3,12 @@ package api
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -31,7 +33,20 @@ var (
 
 	// HttpClient is the client used by iron_go to make each http request. It is exported in case
 	// the client would like to modify it from the default behavior from http.DefaultClient.
-	HttpClient = &http.Client{}
+	// This uses the DefaultTransport modified to enable TLS Session Client caching.
+	HttpClient = &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			Dial: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).Dial,
+			TLSHandshakeTimeout: 10 * time.Second,
+			TLSClientConfig: &tls.Config{
+				ClientSessionCache: tls.NewLRUClientSessionCache(8192),
+			},
+		},
+	}
 )
 
 func dbg(v ...interface{}) {
