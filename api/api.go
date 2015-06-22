@@ -28,8 +28,9 @@ type URL struct {
 }
 
 var (
-	Debug         bool
-	DebugOnErrors bool
+	Debug            bool
+	DebugOnErrors    bool
+	DefaultCacheSize = 8192
 
 	// HttpClient is the client used by iron_go to make each http request. It is exported in case
 	// the client would like to modify it from the default behavior from http.DefaultClient.
@@ -43,7 +44,7 @@ var (
 			}).Dial,
 			TLSHandshakeTimeout: 10 * time.Second,
 			TLSClientConfig: &tls.Config{
-				ClientSessionCache: tls.NewLRUClientSessionCache(8192),
+				ClientSessionCache: tls.NewLRUClientSessionCache(DefaultCacheSize),
 			},
 		},
 	}
