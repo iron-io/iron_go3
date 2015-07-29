@@ -62,14 +62,16 @@ queue := mq.ConfigNew("test_queue", settings);
 Push queues must be explicitly created. There's no changing a queue's type.
 
 ```go
-alerts := []mq.Alert{mq.Alert{Queue: "alert332", Trigger: 5, Direction: "desc", Type: "fixed"}}
+subscribers := []mq.QueueSubscriber{mq.QueueSubscriber{Name: "sub1", URL: "wwww.subscriber1.com"}, mq.QueueSubscriber{Name: "sub2", URL: "wwww.subscriber2.com"}}
 subscription := mq.PushInfo {
    Retries:  3,
    RetriesDelay: 60,
    ErrorQueue: "error_queue",
+   Subscribers: subscribers,
 }
-queueInfo := mq.QueueInfo{ Type: "multicast", MessageExpiration: 60, MessageTimeout: 56}
-result, err := mq.CreateQueue("test_queue", queueInfo, alerts, subscription, "wwww.subscriber1.com", "wwww.subscriber2.com")
+queue_type := "multicast";
+queueInfo := mq.QueueInfo{ Type: &queue_type, MessageExpiration: 60, MessageTimeout: 56, Push: &subscription}
+result, err := mq.CreateQueue("test_queue", queueInfo);
 ```
 
 ## The Basics
