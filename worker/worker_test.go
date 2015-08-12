@@ -1,12 +1,9 @@
 package worker
 
 import (
-	"io/ioutil"
-	"os"
 	"testing"
 	"time"
 
-	// "github.com/iron-io/iron_go/worker"
 	. "github.com/jeffh/go.bdd"
 )
 
@@ -27,33 +24,6 @@ func TestEverything(*testing.T) {
 			codes, err = w.CodePackageList(0, 100)
 			Expect(err, ToBeNil)
 			Expect(len(codes), ToEqual, 0)
-		})
-
-		It("Creates a code package", func() {
-			tempDir, err := ioutil.TempDir("", "iron-worker")
-			Expect(err, ToBeNil)
-			defer os.RemoveAll(tempDir)
-
-			fd, err := os.Create(tempDir + "/main.go")
-			Expect(err, ToBeNil)
-
-			n, err := fd.WriteString(`package main; func main(){ println("Hello world!") }`)
-			Expect(err, ToBeNil)
-			Expect(n, ToEqual, 52)
-
-			Expect(fd.Close(), ToBeNil)
-
-			pkg, err := NewGoCodePackage("GoFun", fd.Name())
-			Expect(err, ToBeNil)
-
-			id, err := w.CodePackageUpload(pkg)
-			Expect(err, ToBeNil)
-
-			info, err := w.CodePackageInfo(id)
-			Expect(err, ToBeNil)
-			Expect(info.Id, ToEqual, id)
-			Expect(info.Name, ToEqual, "GoFun")
-			Expect(info.Rev, ToEqual, 1)
 		})
 
 		It("Queues a Task", func() {
