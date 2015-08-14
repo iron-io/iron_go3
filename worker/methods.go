@@ -1,15 +1,8 @@
 package worker
 
 import (
-	"archive/zip"
-	"bytes"
-	"encoding/json"
 	"io/ioutil"
-	"mime/multipart"
-	"net/http"
 	"time"
-
-	"github.com/iron-io/iron_go3/api"
 )
 
 type Schedule struct {
@@ -75,8 +68,6 @@ type TaskInfo struct {
 	EndTime       time.Time `json:"end_time"`
 }
 
-type CodeSource map[string][]byte // map[pathInZip]code
-
 type Code struct {
 	Name           string        `json:"name"`
 	Runtime        string        `json:"runtime"`
@@ -88,7 +79,6 @@ type Code struct {
 	Image          string        `json:"image"`
 	Command        string        `json:"command"`
 	RetriesDelay   time.Duration `json:"-"`
-	Source         CodeSource    `json:"-"`
 }
 
 type CodeInfo struct {
@@ -123,87 +113,6 @@ func (w *Worker) CodePackageList(page, perPage int) (codes []CodeInfo, err error
 	}
 
 	return out["codes"], nil
-}
-
-// CodePackageUpload uploads a code package
-func (w *Worker) CodePackageUpload(code Code) (id string, err error) {
-	client := http.Client{}
-
-	body := &bytes.Buffer{}
-	mWriter := multipart.NewWriter(body)
-
-	// write meta-data
-	mMetaWriter, err := mWriter.CreateFormField("data")
-	if err != nil {
-		return
-	}
-	jEncoder := json.NewEncoder(mMetaWriter)
-	err = jEncoder.Encode(map[string]interface{}{
-		"name":            code.Name,
-		"runtime":         code.Runtime,
-		"file_name":       code.FileName,
-		"config":          code.Config,
-		"max_concurrency": code.MaxConcurrency,
-		"retries":         code.Retries,
-		"retries_delay":   code.RetriesDelay.Seconds(),
-	})
-	if err != nil {
-		return
-	}
-
-	// write the zip
-	mFileWriter, err := mWriter.CreateFormFile("file", "worker.zip")
-	if err != nil {
-		return
-	}
-	zWriter := zip.NewWriter(mFileWriter)
-
-	for sourcePath, sourceText := range code.Source {
-		fWriter, err := zWriter.Create(sourcePath)
-		if err != nil {
-			return "", err
-		}
-		fWriter.Write([]byte(sourceText))
-	}
-
-	zWriter.Close()
-
-	// done with multipart
-	mWriter.Close()
-
-	req, err := http.NewRequest("POST", w.codes().URL.String(), body)
-	if err != nil {
-		return
-	}
-
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Accept-Encoding", "gzip/deflate")
-	req.Header.Set("Authorization", "OAuth "+w.Settings.Token)
-	req.Header.Set("Content-Type", mWriter.FormDataContentType())
-	req.Header.Set("User-Agent", w.Settings.UserAgent)
-
-	// dumpRequest(req) NOTE: never do this here, it breaks stuff
-	response, err := client.Do(req)
-	if err != nil {
-		return
-	}
-	if err = api.ResponseAsError(response); err != nil {
-		return
-	}
-
-	// dumpResponse(response)
-
-	data := struct {
-		Id         string `json:"id"`
-		Msg        string `json:"msg"`
-		StatusCode int    `json:"status_code"`
-	}{}
-	err = json.NewDecoder(response.Body).Decode(&data)
-	if err != nil {
-		return
-	}
-
-	return data.Id, err
 }
 
 // CodePackageInfo gets info about a code package
