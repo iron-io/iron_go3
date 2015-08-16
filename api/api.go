@@ -93,16 +93,16 @@ func (u *URL) QueryAdd(key string, format string, value interface{}) *URL {
 }
 
 func (u *URL) Req(method string, in, out interface{}) (err error) {
-	var reqBody io.Reader
-	if in != nil {
-		data, err := json.Marshal(in)
-		if err != nil {
-			return err
-		}
-		reqBody = bytes.NewBuffer(data)
+	if in == nil {
+		in = &struct{}{}
 	}
-	response, err := u.Request(method, reqBody)
-	if response != nil {
+	data, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+
+	response, err := u.req(method, data)
+	if response != nil && response.Body != nil {
 		defer response.Body.Close()
 	}
 	if err == nil && out != nil {
@@ -110,27 +110,28 @@ func (u *URL) Req(method string, in, out interface{}) (err error) {
 		dbg("u:", u, "out:", fmt.Sprintf("%#v\n", out))
 	}
 
+	// throw it away
+	io.Copy(ioutil.Discard, response.Body)
 	return
 }
 
 var MaxRequestRetries = 5
 
 func (u *URL) Request(method string, body io.Reader) (response *http.Response, err error) {
-	var bodyBytes []byte
-	if body == nil {
-		bodyBytes = []byte{}
-	} else {
-		bodyBytes, err = ioutil.ReadAll(body)
-		if err != nil {
-			return nil, err
-		}
+	bytes, err := ioutil.ReadAll(body)
+	if err != nil {
+		return
 	}
+	return u.req(method, bytes)
+}
 
+func (u *URL) req(method string, body []byte) (response *http.Response, err error) {
 	request, err := http.NewRequest(method, u.URL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
 
+	request.ContentLength = int64(len(body))
 	request.Header.Set("Authorization", "OAuth "+u.Settings.Token)
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Accept-Encoding", "gzip/deflate")
@@ -143,13 +144,16 @@ func (u *URL) Request(method string, body io.Reader) (response *http.Response, e
 	dbg("request:", fmt.Sprintf("%#v\n", request))
 
 	for tries := 0; tries <= MaxRequestRetries; tries++ {
-		request.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
+		request.Body = ioutil.NopCloser(bytes.NewReader(body)) // reads are only useful once
 		response, err = HttpClient.Do(request)
 		if err != nil {
+			if response != nil && response.Body != nil {
+				response.Body.Close()
+			}
 			if err == io.EOF {
 				continue
 			}
-			return
+			return nil, err
 		}
 
 		if response.StatusCode == http.StatusServiceUnavailable {
@@ -163,7 +167,7 @@ func (u *URL) Request(method string, body io.Reader) (response *http.Response, e
 
 	// DumpResponse(response)
 	if err = ResponseAsError(response); err != nil {
-		return
+		return nil, err
 	}
 
 	return
@@ -193,23 +197,26 @@ var HTTPErrorDescriptions = map[int]string{
 }
 
 func ResponseAsError(response *http.Response) HTTPResponseError {
-	if response.StatusCode == http.StatusOK {
+	if response.StatusCode == http.StatusOK || response.StatusCode == http.StatusCreated {
 		return nil
 	}
 
-	defer response.Body.Close()
+	if response.Body != nil {
+		defer response.Body.Close()
+	}
+
 	desc, found := HTTPErrorDescriptions[response.StatusCode]
 	if found {
 		return resErr{response: response, error: response.Status + ": " + desc}
 	}
 
-	out := map[string]interface{}{}
+	var out DefaultResponseBody
 	err := json.NewDecoder(response.Body).Decode(&out)
 	if err != nil {
 		return resErr{response: response, error: fmt.Sprint(response.Status, ": ", err.Error())}
 	}
-	if msg, ok := out["msg"]; ok {
-		return resErr{response: response, error: fmt.Sprint(response.Status, ": ", msg)}
+	if out.Msg != "" {
+		return resErr{response: response, error: fmt.Sprint(response.Status, ": ", out.Msg)}
 	}
 
 	return resErr{response: response, error: response.Status + ": Unknown API Response"}
@@ -227,3 +234,4 @@ type resErr struct {
 
 func (h resErr) Error() string            { return h.error }
 func (h resErr) Response() *http.Response { return h.response }
+func (h resErr) StatusCode() int          { return h.response.StatusCode }
