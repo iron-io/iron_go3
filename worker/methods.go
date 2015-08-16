@@ -1,15 +1,8 @@
 package worker
 
 import (
-	"archive/zip"
-	"bytes"
-	"encoding/json"
 	"io/ioutil"
-	"mime/multipart"
-	"net/http"
 	"time"
-
-	"github.com/iron-io/iron_go3/api"
 )
 
 type Schedule struct {
@@ -23,6 +16,8 @@ type Schedule struct {
 	RunEvery       *int           `json:"run_every"`
 	RunTimes       *int           `json:"run_times"`
 	StartAt        *time.Time     `json:"start_at"`
+	Cluster        string         `json:"cluster"`
+	Label          string         `json:"label"`
 }
 
 type ScheduleInfo struct {
@@ -48,6 +43,8 @@ type Task struct {
 	Priority int            `json:"priority"`
 	Timeout  *time.Duration `json:"timeout"`
 	Delay    *time.Duration `json:"delay"`
+	Cluster  string         `json:"cluster"`
+	Label    string         `json:"label"`
 }
 
 type TaskInfo struct {
@@ -59,23 +56,29 @@ type TaskInfo struct {
 	Payload       string    `json:"payload"`
 	ProjectId     string    `json:"project_id"`
 	Status        string    `json:"status"`
+	Msg           string    `json:"msg,omitempty"`
 	ScheduleId    string    `json:"schedule_id"`
 	Duration      int       `json:"duration"`
 	RunTimes      int       `json:"run_times"`
 	Timeout       int       `json:"timeout"`
+	Percent       int       `json:"percent,omitempty"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 	StartTime     time.Time `json:"start_time"`
 	EndTime       time.Time `json:"end_time"`
 }
 
-type CodeSource map[string][]byte // map[pathInZip]code
-
 type Code struct {
-	Name     string
-	Runtime  string
-	FileName string
-	Source   CodeSource
+	Name           string        `json:"name"`
+	Runtime        string        `json:"runtime"`
+	FileName       string        `json:"file_name"`
+	Config         string        `json:"config,omitempty"`
+	MaxConcurrency int           `json:"max_concurrency,omitempty"`
+	Retries        int           `json:"retries,omitempty"`
+	Stack          string        `json:"stack"`
+	Image          string        `json:"image"`
+	Command        string        `json:"command"`
+	RetriesDelay   time.Duration `json:"-"`
 }
 
 type CodeInfo struct {
@@ -84,7 +87,7 @@ type CodeInfo struct {
 	LatestHistoryId string    `json:"latest_history_id"`
 	Name            string    `json:"name"`
 	ProjectId       string    `json:"project_id"`
-	Runtime         string    `json:"runtime"`
+	Runtime         *string   `json:"runtime"`
 	Rev             int       `json:"rev"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
@@ -110,81 +113,6 @@ func (w *Worker) CodePackageList(page, perPage int) (codes []CodeInfo, err error
 	}
 
 	return out["codes"], nil
-}
-
-// CodePackageUpload uploads a code package
-func (w *Worker) CodePackageUpload(code Code) (id string, err error) {
-	body := &bytes.Buffer{}
-	mWriter := multipart.NewWriter(body)
-
-	// write meta-data
-	mMetaWriter, err := mWriter.CreateFormField("data")
-	if err != nil {
-		return
-	}
-	jEncoder := json.NewEncoder(mMetaWriter)
-	err = jEncoder.Encode(map[string]string{
-		"name":      code.Name,
-		"runtime":   code.Runtime,
-		"file_name": code.FileName,
-	})
-	if err != nil {
-		return
-	}
-
-	// write the zip
-	mFileWriter, err := mWriter.CreateFormFile("file", "worker.zip")
-	if err != nil {
-		return
-	}
-	zWriter := zip.NewWriter(mFileWriter)
-
-	for sourcePath, sourceText := range code.Source {
-		fWriter, err := zWriter.Create(sourcePath)
-		if err != nil {
-			return "", err
-		}
-		fWriter.Write([]byte(sourceText))
-	}
-
-	zWriter.Close()
-
-	// done with multipart
-	mWriter.Close()
-
-	req, err := http.NewRequest("POST", w.codes().URL.String(), body)
-	if err != nil {
-		return
-	}
-
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Accept-Encoding", "gzip/deflate")
-	req.Header.Set("Authorization", "OAuth "+w.Settings.Token)
-	req.Header.Set("Content-Type", mWriter.FormDataContentType())
-	req.Header.Set("User-Agent", w.Settings.UserAgent)
-
-	// dumpRequest(req) NOTE: never do this here, it breaks stuff
-	response, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return
-	}
-	if err = api.ResponseAsError(response); err != nil {
-		return
-	}
-
-	// dumpResponse(response)
-
-	data := struct {
-		Id         string `json:"id"`
-		Msg        string `json:"msg"`
-		StatusCode int    `json:"status_code"`
-	}{}
-	err = json.NewDecoder(response.Body).Decode(&data)
-	if err != nil {
-		return
-	}
-
-	return data.Id, err
 }
 
 // CodePackageInfo gets info about a code package
@@ -222,6 +150,50 @@ func (w *Worker) TaskList() (tasks []TaskInfo, err error) {
 	return out["tasks"], nil
 }
 
+type TaskListParams struct {
+	CodeName string
+	Page     int
+	PerPage  int
+	FromTime time.Time
+	ToTime   time.Time
+	Statuses []string
+}
+
+func (w *Worker) FilteredTaskList(params TaskListParams) (tasks []TaskInfo, err error) {
+	out := map[string][]TaskInfo{}
+	url := w.tasks()
+
+	url.QueryAdd("code_name", "%s", params.CodeName)
+
+	if params.Page > 0 {
+		url.QueryAdd("page", "%d", params.Page)
+	}
+
+	if params.PerPage > 0 {
+		url.QueryAdd("per_page", "%d", params.PerPage)
+	}
+
+	if fromTimeSeconds := params.FromTime.Unix(); fromTimeSeconds > 0 {
+		url.QueryAdd("from_time", "%d", fromTimeSeconds)
+	}
+
+	if toTimeSeconds := params.ToTime.Unix(); toTimeSeconds > 0 {
+		url.QueryAdd("to_time", "%d", toTimeSeconds)
+	}
+
+	for _, status := range params.Statuses {
+		url.QueryAdd(status, "%d", true)
+	}
+
+	err = url.Req("GET", nil, &out)
+
+	if err != nil {
+		return
+	}
+
+	return out["tasks"], nil
+}
+
 // TaskQueue queues a task
 func (w *Worker) TaskQueue(tasks ...Task) (taskIds []string, err error) {
 	outTasks := make([]map[string]interface{}, 0, len(tasks))
@@ -231,12 +203,14 @@ func (w *Worker) TaskQueue(tasks ...Task) (taskIds []string, err error) {
 			"code_name": task.CodeName,
 			"payload":   task.Payload,
 			"priority":  task.Priority,
+			"cluster":   task.Cluster,
+			"label":     task.Label,
 		}
 		if task.Timeout != nil {
 			thisTask["timeout"] = (*task.Timeout).Seconds()
 		}
 		if task.Delay != nil {
-			thisTask["delay"] = (*task.Delay).Seconds()
+			thisTask["delay"] = int64((*task.Delay).Seconds())
 		}
 
 		outTasks = append(outTasks, thisTask)
@@ -287,7 +261,15 @@ func (w *Worker) TaskCancel(taskId string) (err error) {
 }
 
 // TaskProgress sets a Task's Progress
-func (w *Worker) TaskProgress(taskId string, progress int) (err error) { return }
+func (w *Worker) TaskProgress(taskId string, progress int, msg string) (err error) {
+	payload := map[string]interface{}{
+		"msg":     msg,
+		"percent": progress,
+	}
+
+	err = w.tasks(taskId, "progress").Req("POST", payload, nil)
+	return
+}
 
 // TaskQueueWebhook queues a Task from a Webhook
 func (w *Worker) TaskQueueWebhook() (err error) { return }
@@ -311,6 +293,8 @@ func (w *Worker) Schedule(schedules ...Schedule) (scheduleIds []string, err erro
 			"code_name": schedule.CodeName,
 			"name":      schedule.Name,
 			"payload":   schedule.Payload,
+			"label":     schedule.Label,
+			"cluster":   schedule.Cluster,
 		}
 		if schedule.Delay != nil {
 			sm["delay"] = (*schedule.Delay).Seconds()
