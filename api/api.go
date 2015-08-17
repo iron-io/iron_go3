@@ -137,9 +137,12 @@ func (u *URL) Req(method string, in, out interface{}) error {
 
 // returned body must be closed by caller if non-nil
 func (u *URL) Request(method string, body io.Reader) (response *http.Response, err error) {
-	bytes, err := ioutil.ReadAll(body)
-	if err != nil {
-		return nil, err
+	var bytes []byte
+	if body != nil {
+		bytes, err = ioutil.ReadAll(body)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return u.req(method, bytes)
 }

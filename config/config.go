@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/user"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -59,96 +58,76 @@ func dbg(v ...interface{}) {
 	}
 }
 
-// ManualConfig gathers configuration from env variables and json config files.
+// ManualConfig gathers configuration from env variables, json config files
+// and finally overwrites it with specified instance of Settings.
 // Examples of fullProduct are "iron_worker", "iron_cache", "iron_mq" and
-// finally overwrites it with specified instance of Settings.
 func ManualConfig(fullProduct string, configuration *Settings) (settings Settings) {
-	if os.Getenv("IRON_CONFIG_DEBUG") != "" {
-		debug = true
-		dbg("debugging of config enabled")
-	}
-	pair := strings.SplitN(fullProduct, "_", 2)
-	if len(pair) != 2 {
-		panic("Invalid product name, has to use prefix.")
-	}
-	family, product := pair[0], pair[1]
-
-	base, found := Presets[product]
-
-	if !found {
-		base = Settings{
-			Scheme:     "https",
-			Port:       443,
-			ApiVersion: "1",
-			Host:       product + "-aws-us-east-1.iron.io",
-			UserAgent:  "iron_go",
-		}
-	}
-
-	base.globalConfig(family, product)
-	base.globalEnv(family, product)
-	base.productEnv(family, product)
-	base.localConfig(family, product)
-	base.manualConfig(configuration)
-
-	return base
-}
-
-func ConfigWithEnv(fullProduct, env string) Settings {
-	if os.Getenv("IRON_CONFIG_DEBUG") != "" {
-		debug = true
-		dbg("debugging of config enabled")
-	}
-	pair := strings.SplitN(fullProduct, "_", 2)
-	if len(pair) != 2 {
-		panic("Invalid product name, has to use prefix.")
-	}
-	family, product := pair[0], pair[1]
-
-	base, found := Presets[product]
-
-	if !found {
-		base = Settings{
-			Scheme:     "https",
-			Port:       443,
-			ApiVersion: "1",
-			Host:       product + "-aws-us-east-1.iron.io",
-			UserAgent:  "iron_go",
-		}
-	}
-
-	base.oldGlobalConfig(family, product, env)
-	base.globalEnv(family, product)
-	base.productEnv(family, product)
-	base.oldLocalConfig(family, product, env)
-	base.manualConfig(nil)
-
-	return base
+	return config(fullProduct, "", configuration)
 }
 
 // Config gathers configuration from env variables and json config files.
 // Examples of fullProduct are "iron_worker", "iron_cache", "iron_mq".
 func Config(fullProduct string) (settings Settings) {
-	return ManualConfig(fullProduct, nil)
+	return config(fullProduct, "", nil)
 }
 
-func (s *Settings) globalConfig(family, product string) {
-	if u, err := user.Current(); err == nil {
-		path := filepath.Join(u.HomeDir, ".iron.json")
-		s.UseConfigFile(family, product, path)
+// Like Config, but useful for keeping multiple dev environment information in
+// one iron.json config file. If env="", works same as Config.
+//
+// e.g.
+//    {
+//        "production": {
+//            "token": ...,
+//            "project_id": ...
+//        },
+//        "test": {
+//            ...
+//        }
+//    }
+func ConfigWithEnv(fullProduct, env string) (settings Settings) {
+	return config(fullProduct, env, nil)
+}
+
+func config(fullProduct, env string, configuration *Settings) Settings {
+	if os.Getenv("IRON_CONFIG_DEBUG") != "" {
+		debug = true
+		dbg("debugging of config enabled")
 	}
+	pair := strings.SplitN(fullProduct, "_", 2)
+	if len(pair) != 2 {
+		panic("Invalid product name, has to use prefix.")
+	}
+	family, product := pair[0], pair[1]
+
+	base, found := Presets[product]
+
+	if !found {
+		base = Settings{
+			Scheme:     "https",
+			Port:       443,
+			ApiVersion: "1",
+			Host:       product + "-aws-us-east-1.iron.io",
+			UserAgent:  "iron_go",
+		}
+	}
+
+	base.globalConfig(family, product, env)
+	base.globalEnv(family, product)
+	base.productEnv(family, product)
+	base.localConfig(family, product, env)
+	base.manualConfig(configuration)
+
+	return base
 }
 
-func (s *Settings) oldGlobalConfig(family, product, env string) {
-	u, err := user.Current()
+func (s *Settings) globalConfig(family, product, env string) {
+	home, err := homeDir()
 	if err != nil {
-		fmt.Println("Error getting user.Current():", err)
+		fmt.Println("Error getting home directory:", err)
 		return
-
 	}
-	//	fmt.Println("Homedir:", u.HomeDir)
-	path := filepath.Join(u.HomeDir, ".iron.json")
-	s.oldUseConfigFile(family, product, path, env)
+	path := filepath.Join(home, ".iron.json")
+	s.UseConfigFile(family, product, path, env)
 }
 
 // The environment variables the scheme looks for are all of the same formula:
@@ -169,12 +148,8 @@ func (s *Settings) productEnv(family, product string) {
 	s.commonEnv(eProduct)
 }
 
-func (s *Settings) localConfig(family, product string) {
-	s.UseConfigFile(family, product, "iron.json")
-}
-
-func (s *Settings) oldLocalConfig(family, product, env string) {
-	s.oldUseConfigFile(family, product, "iron.json", env)
+func (s *Settings) localConfig(family, product, env string) {
+	s.UseConfigFile(family, product, "iron.json", env)
 }
 
 func (s *Settings) manualConfig(settings *Settings) {
@@ -215,30 +190,7 @@ func (s *Settings) commonEnv(prefix string) {
 }
 
 // Load and merge the given JSON config file.
-func (s *Settings) UseConfigFile(family, product, path string) {
-	content, err := ioutil.ReadFile(path)
-	if err != nil {
-		dbg("tried to", err, ": skipping")
-		return
-	}
-
-	data := map[string]interface{}{}
-	err = json.Unmarshal(content, &data)
-	if err != nil {
-		panic("Invalid JSON in " + path + ": " + err.Error())
-	}
-
-	dbg("config in", path, "found")
-	s.UseConfigMap(data)
-
-	ipData, found := data[family+"_"+product]
-	if found {
-		pData := ipData.(map[string]interface{})
-		s.UseConfigMap(pData)
-	}
-}
-
-func (s *Settings) oldUseConfigFile(family, product, path, env string) {
+func (s *Settings) UseConfigFile(family, product, path, env string) {
 	content, err := ioutil.ReadFile(path)
 	if err != nil {
 		dbg("tried to", err, ": skipping")
