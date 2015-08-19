@@ -142,32 +142,32 @@ func ConfigCreateQueue(queueInfo QueueInfo, settings *config.Settings) (QueueInf
 // List will get a listQueues of all queues for the configured project, paginated 30 at a time.
 // For paging or filtering, see ListPage and Filter.
 func List() ([]Queue, error) {
-	return listQueues("", "", 0)
+	return ListQueues(config.Config("iron_mq"), "", "", 0)
 }
 
 // ListPage is like List, but will allow specifying a page length and pagination.
 // To get the first page, let prev = "".
 // To get the second page, use the name of the last queue on the first page as "prev".
 func ListPage(prev string, perPage int) ([]Queue, error) {
-	return listQueues("", prev, perPage)
+	return ListQueues(config.Config("iron_mq"), "", prev, perPage)
 }
 
 // Filter is like List, but will only return queues with the specified prefix.
 func Filter(prefix string) ([]Queue, error) {
-	return listQueues(prefix, "", 0)
+	return ListQueues(config.Config("iron_mq"), prefix, "", 0)
 }
 
 // Like ListPage, but with an added filter.
 func FilterPage(prefix, prev string, perPage int) ([]Queue, error) {
-	return listQueues(prefix, prev, perPage)
+	return ListQueues(config.Config("iron_mq"), prefix, prev, perPage)
 }
 
-func listQueues(prefix, prev string, perPage int) ([]Queue, error) {
+func ListQueues(s config.Settings, prefix, prev string, perPage int) ([]Queue, error) {
 	var out struct {
 		Queues []Queue `json:"queues"`
 	}
 
-	url := api.Action(config.Config("iron_mq"), "queues")
+	url := api.Action(s, "queues")
 
 	if prev != "" {
 		url.QueryAdd("previous", "%v", prev)
