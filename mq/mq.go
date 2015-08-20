@@ -139,35 +139,58 @@ func ConfigCreateQueue(queueInfo QueueInfo, settings *config.Settings) (QueueInf
 	return out.Queue, err
 }
 
-// List will get a listQueues of all queues for the configured project, paginated 30 at a time.
+// List will get a listQueues of all queues for the configured project, paginated 30 at a time
 // For paging or filtering, see ListPage and Filter.
+// Uses the default configuration settings.
 func List() ([]Queue, error) {
-	return listQueues("", "", 0)
+	return ConfigList(config.Config("iron_mq"))
 }
 
-// ListPage is like List, but will allow specifying a page length and pagination.
+// ConfigList is like List but will allow specifying manual configuration settings.
+func ConfigList(settings config.Settings) ([]Queue, error) {
+	return listQueues("", "", 0, settings)
+}
+
+// ListPage is like List, but will allow specifying a page length and pagination
 // To get the first page, let prev = "".
 // To get the second page, use the name of the last queue on the first page as "prev".
+// Uses the default configuration settings.
 func ListPage(prev string, perPage int) ([]Queue, error) {
-	return listQueues("", prev, perPage)
+	return ConfigListPage(prev, perPage, config.Config("iron_mq"))
+}
+
+// ConfigListPage is like ListPage, but will allow specifying manual configuration settings.
+func ConfigListPage(prev string, perPage int, settings config.Settings) ([]Queue, error) {
+	return listQueues("", prev, perPage, settings)
 }
 
 // Filter is like List, but will only return queues with the specified prefix.
+// Uses the default configuration settings.
 func Filter(prefix string) ([]Queue, error) {
-	return listQueues(prefix, "", 0)
+	return FilterConfig(prefix, config.Config("iron_mq"))
+}
+
+// FilterConfig is like Filter, but will allow specifying manual configuration settings.
+func FilterConfig(prefix string, settings config.Settings) ([]Queue, error) {
+	return listQueues(prefix, "", 0, settings)
 }
 
 // Like ListPage, but with an added filter.
+// Uses the default configuration settings.
 func FilterPage(prefix, prev string, perPage int) ([]Queue, error) {
-	return listQueues(prefix, prev, perPage)
+	return FilterPageConfig(prefix, prev, perPage, config.Config("iron_mq"))
 }
 
-func listQueues(prefix, prev string, perPage int) ([]Queue, error) {
+// Like FilterPage, but will allow specifying manual configuration settings.
+func FilterPageConfig(prefix, prev string, perPage int, settings config.Settings) ([]Queue, error) {
+	return listQueues(prefix, prev, perPage, settings)
+}
+
+func listQueues(prefix, prev string, perPage int, settings config.Settings) ([]Queue, error) {
 	var out struct {
 		Queues []Queue `json:"queues"`
 	}
-
-	url := api.Action(config.Config("iron_mq"), "queues")
+	url := api.Action(settings, "queues")
 
 	if prev != "" {
 		url.QueryAdd("previous", "%v", prev)
