@@ -385,47 +385,40 @@ func (q Queue) Clear() (err error) {
 
 // Delete message from queue
 func (q Queue) DeleteMessage(msgId, reservationId string) (err error) {
-	body := map[string]string{
-		"reservation_id": reservationId,
-	}
+	body := struct {
+		Res string `json:"reservation_id"`
+	}{Res: reservationId}
 	return q.queues(q.Name, "messages", msgId).Req("DELETE", body, nil)
 }
 
 // Delete multiple messages by id
 func (q Queue) DeleteMessages(ids []string) error {
-	values := make([]map[string]string, len(ids))
+	in := struct {
+		Ids []delmsg `json:"ids"`
+	}{Ids: make([]delmsg, len(ids))}
 
 	for i, val := range ids {
-		element := map[string]string{
-			"id": val,
-		}
-		values[i] = element
-	}
-	in := struct {
-		Ids []map[string]string `json:"ids"`
-	}{
-		Ids: values,
+		in.Ids[i].Id = val
 	}
 	return q.queues(q.Name, "messages").Req("DELETE", in, nil)
 }
 
+type delmsg struct {
+	Id  string `json:"id"`
+	Res string `json:"reservation_id"`
+}
+
 // Delete multiple reserved messages from the queue
 func (q Queue) DeleteReservedMessages(messages []Message) error {
-	values := make([]map[string]string, len(messages))
+	ids := struct {
+		Ids []delmsg `json:"ids"`
+	}{Ids: make([]delmsg, len(messages))}
 
 	for i, val := range messages {
-		element := map[string]string{
-			"id":             val.Id,
-			"reservation_id": val.ReservationId,
-		}
-		values[i] = element
+		ids.Ids[i].Id = val.Id
+		ids.Ids[i].Res = val.ReservationId
 	}
-	in := struct {
-		Ids []map[string]string `json:"ids"`
-	}{
-		Ids: values,
-	}
-	return q.queues(q.Name, "messages").Req("DELETE", in, nil)
+	return q.queues(q.Name, "messages").Req("DELETE", ids, nil)
 }
 
 // Reset timeout of message to keep it reserved
