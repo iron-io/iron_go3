@@ -219,7 +219,7 @@ if(deleted) {
 ```go
 id, err := q.PushString("Hello, World!")
 // To control parameters like timeout and delay, construct your own message.
-id, err := q.PushMessage(&mq.Message{Timeout: 60, Delay: 0, Body: "Hi there"})
+id, err := q.PushMessage(&mq.Message{Delay: 0, Body: "Hi there"})
 ```
 
 **Multiple messages:**
@@ -234,18 +234,14 @@ To control parameters like timeout and delay, construct your own message.
 
 ```go
 ids, err = q.PushMessages(
-	&mq.Message{Timeout: 60, Delay: 0,  Body: "The first"},
-	&mq.Message{Timeout: 60, Delay: 10, Body: "The second"},
-	&mq.Message{Timeout: 60, Delay: 10, Body: "The third"},
-	&mq.Message{Timeout: 60, Delay: 0,  Body: "The fifth"},
+	&mq.Message{Delay: 0,  Body: "The first"},
+	&mq.Message{Delay: 10, Body: "The second"},
+	&mq.Message{Delay: 10, Body: "The third"},
+	&mq.Message{Delay: 0,  Body: "The fifth"},
 )
 ```
 
 **Parameters:**
-
-* `Timeout`: After timeout (in seconds), item will be placed back onto queue.
-You must delete the message from the queue to ensure it does not go back onto the queue.
- Default is 60 seconds. Minimum is 30 seconds. Maximum is 86,400 seconds (24 hours).
 
 * `Delay`: The item will not be available on the queue until this many seconds have passed.
 Default is 0 seconds. Maximum is 604,800 seconds (7 days).
