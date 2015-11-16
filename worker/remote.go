@@ -10,6 +10,7 @@ import (
 
 var (
 	TaskDir     string
+	envFlag     string
 	payloadFlag string
 	TaskId      string
 	configFlag  string
@@ -18,10 +19,23 @@ var (
 // call this to parse flags before using the other methods.
 func ParseFlags() {
 	flag.StringVar(&TaskDir, "d", "", "task dir")
+	flag.StringVar(&envFlag, "e", "", "environment type")
 	flag.StringVar(&payloadFlag, "payload", "", "payload file")
 	flag.StringVar(&TaskId, "id", "", "task id")
 	flag.StringVar(&configFlag, "config", "", "config file")
 	flag.Parse()
+	if os.Getenv("TASK_ID") != "" {
+		TaskId = os.Getenv("TASK_ID")
+	}
+	if os.Getenv("TASK_DIR") != "" {
+		TaskDir = os.Getenv("TASK_DIR")
+	}
+	if os.Getenv("PAYLOAD_FILE") != "" {
+		payloadFlag = os.Getenv("PAYLOAD_FILE")
+	}
+	if os.Getenv("CONFIG_FILE") != "" {
+		configFlag = os.Getenv("CONFIG_FILE")
+	}
 }
 
 func PayloadReader() (io.ReadCloser, error) {
@@ -80,4 +94,8 @@ func ConfigAsString() (string, error) {
 
 func IronTaskId() string {
 	return TaskId
+}
+
+func IronTaskDir() string {
+	return TaskDir
 }
