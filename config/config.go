@@ -3,8 +3,8 @@ package config
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -54,7 +54,7 @@ var (
 
 func dbg(v ...interface{}) {
 	if debug {
-		fmt.Fprintln(os.Stderr, v...)
+		log.Println(v...)
 	}
 }
 
@@ -118,8 +118,7 @@ func config(fullProduct, env string, configuration *Settings) Settings {
 	base.manualConfig(configuration)
 
 	if base.Token == "" || base.ProjectId == "" {
-		fmt.Println("Didn't find token or project_id in configs. Check your environment or iron.json.")
-		os.Exit(1)
+		log.Panicln("Didn't find token or project_id in configs. Check your environment or iron.json.")
 	}
 
 	return base
@@ -128,7 +127,7 @@ func config(fullProduct, env string, configuration *Settings) Settings {
 func (s *Settings) globalConfig(family, product, env string) {
 	home, err := homeDir()
 	if err != nil {
-		fmt.Println("Error getting home directory:", err)
+		log.Println("Error getting home directory:", err)
 		return
 	}
 	path := filepath.Join(home, ".iron.json")
