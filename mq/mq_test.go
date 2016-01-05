@@ -2,7 +2,6 @@ package mq
 
 import (
 	"fmt"
-	"github.com/iron-io/iron_go3/api"
 	"testing"
 	"time"
 
@@ -11,13 +10,12 @@ import (
 
 func TestEverything(t *testing.T) {}
 
-func q(name string) *Queue {
+func q(name string) Queue {
 	c := New(name)
 	return c
 }
 
 func init() {
-	api.Debug = true
 	defer PrintSpecReport()
 
 	Describe("IronMQ", func() {
@@ -79,15 +77,13 @@ func init() {
 
 		It("Lists all queues", func() {
 			c := q("queuename")
-			queues, err := c.ListQueues("", 100) // can't check the caches value just yet.
+			queues, err := ListQueues(c.Settings, "", "", 101) // can't check the caches value just yet.
 			Expect(err, ToBeNil)
 			l := len(queues)
 			t := l >= 1
 			Expect(t, ToBeTrue)
 			found := false
-			fmt.Println("!!!!!!!!! QUEUES:", queues)
 			for _, queue := range queues {
-				fmt.Println("queue:", queue.Name)
 				if queue.Name == "queuename" {
 					found = true
 					break
@@ -120,16 +116,27 @@ func init() {
 		})
 
 		It("updates a queue", func() {
-			c := q("pushqueue" + time.Now().String())
-			fmt.Println(c)
-			_, err := c.PushString("Hello")
+			name := "pushqueue" + time.Now().String()
+
+			_, err := CreateQueue(name, QueueInfo{Type: "multicast", Push: &PushInfo{
+				Subscribers: []QueueSubscriber{{Name: "first", URL: "http://hit.me.with.a.message"}}}})
 			Expect(err, ToBeNil)
+
+			c := q(name)
+
 			info, err := c.Info()
 			Expect(err, ToBeNil)
-			qi := QueueInfo{Push: PushInfo{Type: "multicast"}}
+
+			qi := QueueInfo{Type: "multicast", Push: &PushInfo{
+				Subscribers: []QueueSubscriber{{Name: "first", URL: "http://hit.me.with.another.message"}}}}
 			rc, err := c.Update(qi)
 			Expect(err, ToBeNil)
+			info, err = c.Info()
+			Expect(err, ToBeNil)
 			Expect(info.Name, ToEqual, rc.Name)
+
+			err = c.Delete()
+			Expect(err, ToBeNil)
 		})
 	})
 }
