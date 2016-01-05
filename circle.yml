@@ -1,0 +1,10 @@
+machine:
+  environment:
+    GOPATH: $HOME
+    GOROOT: $HOME/go
+    PATH: $GOROOT/bin:$PATH
+    GO15VENDOREXPERIMENT: 1
+    CHECKOUT_DIR: $HOME/$CIRCLE_PROJECT_REPONAME
+
+test:
+    - go test ./mq
