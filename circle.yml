@@ -15,5 +15,6 @@ checkout:
         pwd: $HOME
 
 test:
-  - go test ./mq:
-      pwd: $GO_PROJECT/$CIRCLE_PROJECT_REPONAME
+  override:
+    - go test ./mq:
+        pwd: $GO_PROJECT/$CIRCLE_PROJECT_REPONAME
