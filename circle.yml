@@ -25,5 +25,6 @@ dependencies:
 
 test:
   override:
+    - go get github.com/jeffh/go.bdd:
     - go test ./mq:
         pwd: $GO_PROJECT/$CIRCLE_PROJECT_REPONAME
