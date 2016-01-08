@@ -6,14 +6,14 @@ import (
 	"github.com/iron-io/iron_go3/mq"
 )
 
-func ExampleQueue() {
+func ExampleQueue() error {
 	// Standard way of using a queue will be to just start pushing or
 	// getting messages, q.Upsert isn't necessary unless you explicitly
 	// need to create a queue with custom settings.
 
 	q := mq.New("my_queue2")
 	// Simply pushing messages will create a queue if it doesn't exist, with defaults.
-	msgs, err := q.PushStrings("msg1", "msg2")
+	_, err := q.PushStrings("msg1", "msg2")
 	if err != nil {
 		return err
 	}
@@ -24,9 +24,11 @@ func ExampleQueue() {
 	if len(msgs) != 2 {
 		return errors.New("not good")
 	}
+
+	return nil
 }
 
-func ExampleQueue_Upsert() {
+func ExampleQueue_Upsert() error {
 	// Prepare a Queue from configs
 	q := mq.New("my_queue")
 	// Upsert will create the queue on the server or update its message_timeout
@@ -34,7 +36,7 @@ func ExampleQueue_Upsert() {
 
 	// Let's just make sure we don't have a queue, because we can.
 	if _, err := q.Info(); mq.ErrQueueNotFound(err) {
-		_, err := q.Upsert(QueueInfo{MessageTimeout: 120}) // ok, we'll make one.
+		_, err := q.Update(mq.QueueInfo{MessageTimeout: 120}) // ok, we'll make one.
 		if err != nil {
 			return err
 		}
@@ -42,7 +44,7 @@ func ExampleQueue_Upsert() {
 	// Definitely exists now.
 
 	// Let's just add some messages.
-	msgs, err := q.PushStrings("msg1", "msg2")
+	_, err := q.PushStrings("msg1", "msg2")
 	if err != nil {
 		return err
 	}
@@ -50,9 +52,10 @@ func ExampleQueue_Upsert() {
 	if len(msgs) != 2 {
 		// and it has messages already...
 	}
+	return nil
 }
 
-func ExampleList() {
+func ExampleList() error {
 	qs, err := mq.List() // Will get up to 30 queues. All ready to use.
 	if err != nil {
 		return err
@@ -65,4 +68,5 @@ func ExampleList() {
 			return err
 		}
 	}
+	return nil
 }
