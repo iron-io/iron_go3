@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -53,13 +54,13 @@ var (
 
 func dbg(v ...interface{}) {
 	if Debug {
-		fmt.Fprintln(os.Stderr, v...)
+		log.Println(v...)
 	}
 }
 
 func dbgerr(v ...interface{}) {
 	if DebugOnErrors && !Debug {
-		fmt.Fprintln(os.Stderr, v...)
+		log.Println(v...)
 	}
 }
 
