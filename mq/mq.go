@@ -184,6 +184,10 @@ func ListQueues(s config.Settings, prefix, prev string, perPage int) ([]Queue, e
 		return nil, err
 	}
 
+	for idx := range out.Queues {
+		out.Queues[idx].Settings = s
+	}
+
 	return out.Queues, nil
 }
 
@@ -195,7 +199,6 @@ func (q *Queue) UnmarshalJSON(data []byte) error {
 	}
 	err := json.Unmarshal(data, &name)
 	q.Name = name.Name
-	q.Settings = config.Config("iron_mq") // TODO could maybe cache this in config, map[$PWD]config, if $PWD changes, update config
 	return err
 }
 
