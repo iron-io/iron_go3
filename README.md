@@ -16,7 +16,7 @@ Iron.io Go Client Library
 The [full API documentation is here](http://dev.iron.io/mq/reference/api/) and this client tries to stick to the API as
 much as possible so if you see an option in the API docs, you can use it in the methods below. 
 
-You can find [Go docs here](http://godoc.org/github.com/iron-io/iron_go).
+You can find [Go docs here](http://godoc.org/github.com/iron-io/iron_go3).
 
 ## Getting Started
 
@@ -520,10 +520,10 @@ Returns an array of subscribers with status.
 
 ## Further Links
 
-* [IronMQ Overview](http://dev.iron.io/mq/)
-* [IronMQ REST/HTTP API](http://dev.iron.io/mq/reference/api/)
+* [IronMQ Overview](http://dev.iron.io/mq/3/)
+* [IronMQ REST/HTTP API](http://dev.iron.io/mq/3/reference/api/)
 * [Push Queues](http://dev.iron.io/mq/reference/push_queues/)
-* [Other Client Libraries](http://dev.iron.io/mq/libraries/)
+* [Other Client Libraries](http://dev.iron.io/mq/3/libraries/)
 * [Live Chat, Support & Fun](http://get.iron.io/chat)
 
 -------------
