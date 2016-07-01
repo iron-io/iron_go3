@@ -77,12 +77,12 @@ type Code struct {
 	FileName        string            `json:"file_name"`
 	Config          string            `json:"config,omitempty"`
 	MaxConcurrency  int               `json:"max_concurrency,omitempty"`
-	Retries         int               `json:"retries,omitempty"`
+	Retries         *int              `json:"retries,omitempty"`
+	RetriesDelay    *int              `json:"retries_delay,omitempty"` // seconds
 	Stack           string            `json:"stack"`
 	Image           string            `json:"image"`
 	Command         string            `json:"command"`
-	RetriesDelay    int               `json:"retries_delay,omitempty"` // seconds
-	Host            string            `json:"host,omitempty"`          // PaaS router thing
+	Host            string            `json:"host,omitempty"` // PaaS router thing
 	EnvVars         map[string]string `json:"env_vars"`
 	Source          CodeSource        `json:"-"`
 	DefaultPriority int               `json:"default_priority,omitempty"`
