@@ -24,8 +24,9 @@ type DefaultResponseBody struct {
 }
 
 type URL struct {
-	URL      url.URL
-	Settings config.Settings
+	URL         url.URL
+	ContentType string
+	Settings    config.Settings
 }
 
 var (
@@ -102,17 +103,30 @@ func (u *URL) QueryAdd(key string, format string, value interface{}) *URL {
 	return u
 }
 
-func (u *URL) Req(method string, in, out interface{}) error {
-	if in == nil {
-		in = &struct{}{}
-	}
-	data, err := json.Marshal(in)
-	if err != nil {
-		return err
-	}
-	dbg("request body:", in)
+func (u *URL) SetContentType(t string) *URL {
+	u.ContentType = t
+	return u
+}
 
-	response, err := u.req(method, data)
+func (u *URL) Req(method string, in, out interface{}) error {
+	var body io.ReadSeeker
+	switch in := in.(type) {
+	case io.ReadSeeker:
+		// ready to send (zips uses this)
+		body = in
+	default:
+		if in == nil {
+			in = struct{}{}
+		}
+		data, err := json.Marshal(in)
+		if err != nil {
+			return err
+		}
+		dbg("request body:", in)
+		body = bytes.NewReader(data)
+	}
+
+	response, err := u.req(method, body)
 	if response != nil && response.Body != nil {
 		defer response.Body.Close()
 	}
@@ -123,7 +137,7 @@ func (u *URL) Req(method string, in, out interface{}) error {
 			binary, _ := ioutil.ReadAll(response.Body)
 			body = string(binary)
 		}
-		dbgerr("ERROR!", err, err.Error(), "Request:", string(data), " Response:", body)
+		dbgerr("ERROR!", err, err.Error(), "Request:", body, " Response:", body)
 		return err
 	}
 	dbg("response:", response)
@@ -138,39 +152,49 @@ func (u *URL) Req(method string, in, out interface{}) error {
 
 // returned body must be closed by caller if non-nil
 func (u *URL) Request(method string, body io.Reader) (response *http.Response, err error) {
-	var bytes []byte
+	var byts []byte
 	if body != nil {
-		bytes, err = ioutil.ReadAll(body)
+		byts, err = ioutil.ReadAll(body)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return u.req(method, bytes)
+	return u.req(method, bytes.NewReader(byts))
 }
 
 var MaxRequestRetries = 5
 
-func (u *URL) req(method string, body []byte) (response *http.Response, err error) {
+func (u *URL) req(method string, body io.ReadSeeker) (response *http.Response, err error) {
 	request, err := http.NewRequest(method, u.URL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
 
-	request.ContentLength = int64(len(body))
+	// bytes.Buffer and bytes.Reader both implement `Len() int`, zip uses former, all else latter.
+	// if this changes for some reason, looky here
+	if s, ok := body.(interface {
+		Len() int
+	}); ok {
+		request.ContentLength = int64(s.Len())
+	}
 	request.Header.Set("Authorization", "OAuth "+u.Settings.Token)
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Accept-Encoding", "gzip/deflate")
 	request.Header.Set("User-Agent", u.Settings.UserAgent)
 
-	if body != nil {
+	if u.ContentType != "" {
+		request.Header.Set("Content-Type", u.ContentType)
+	} else if body != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}
+
+	request.Body = ioutil.NopCloser(body)
 
 	dbg("URL:", request.URL.String())
 	dbg("request:", fmt.Sprintf("%#v\n", request))
 
 	for tries := 0; tries < MaxRequestRetries; tries++ {
-		request.Body = ioutil.NopCloser(bytes.NewReader(body)) // because Readers are only useful once
+		body.Seek(0, 0) // set back to beginning for retries
 		response, err = HttpClient.Do(request)
 		if err != nil {
 			if response != nil && response.Body != nil {
