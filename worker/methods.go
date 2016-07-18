@@ -1,7 +1,20 @@
 package worker
 
 import (
+	"archive/zip"
+	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha1"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
+	"encoding/pem"
+	"io"
 	"io/ioutil"
+	"mime/multipart"
 	"time"
 )
 
@@ -146,6 +159,73 @@ func (w *Worker) CodePackageRevisions(codeId string) (code Code, err error) {
 	out := Code{}
 	err = w.codes(codeId, "revisions").Req("GET", nil, &out)
 	return out, err
+}
+
+// CodePackageZipUpload can be used to upload a code package with a zip
+// package, where zipName is a filepath where the zip can be located.  If
+// zipName is an empty string, then the code package will be uploaded without a
+// zip package (see CodePackageUpload).
+func (w *Worker) CodePackageZipUpload(zipName string, args Code) (*Code, error) {
+	return w.codePackageUpload(zipName, args)
+}
+
+// CodePackageUpload uploads a code package without a zip file.
+func (w *Worker) CodePackageUpload(args Code) (*Code, error) {
+	return w.codePackageUpload("", args)
+}
+
+func (w *Worker) codePackageUpload(zipName string, args Code) (*Code, error) {
+	var body bytes.Buffer
+	mWriter := multipart.NewWriter(&body)
+	mMetaWriter, err := mWriter.CreateFormField("data")
+	if err != nil {
+		return nil, err
+	}
+
+	if err := json.NewEncoder(mMetaWriter).Encode(args); err != nil {
+		return nil, err
+	}
+
+	if zipName != "" {
+		r, err := zip.OpenReader(zipName)
+		if err != nil {
+			return nil, err
+		}
+		defer r.Close()
+
+		mFileWriter, err := mWriter.CreateFormFile("file", "worker.zip")
+		if err != nil {
+			return nil, err
+		}
+		zWriter := zip.NewWriter(mFileWriter)
+
+		for _, f := range r.File {
+			fWriter, err := zWriter.Create(f.Name)
+			if err != nil {
+				return nil, err
+			}
+			rc, err := f.Open()
+			if err != nil {
+				return nil, err
+			}
+			_, err = io.Copy(fWriter, rc)
+			rc.Close()
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		zWriter.Close()
+	}
+	mWriter.Close()
+
+	var out Code
+	// wrap body.Bytes() in a bytes.Reader for seekability
+	err = w.codes().
+		SetContentType(mWriter.FormDataContentType()).
+		Req("POST", bytes.NewReader(body.Bytes()), &out)
+
+	return &out, err
 }
 
 func (w *Worker) TaskList() (tasks []TaskInfo, err error) {
@@ -360,4 +440,67 @@ func (w *Worker) ScheduleInfo(scheduleId string) (info ScheduleInfo, err error) 
 func (w *Worker) ScheduleCancel(scheduleId string) (err error) {
 	_, err = w.schedules(scheduleId, "cancel").Request("POST", nil)
 	return
+}
+
+// TODO we should probably support other crypto functions at some point so that people have a choice.
+
+// - expects an x509 rsa public key (ala "-----BEGIN RSA PUBLIC KEY-----")
+// - returns a base64 ciphertext with an rsa encrypted aes-128 session key stored in the bit length
+//   of the modulus of the given RSA key first bits (i.e. 2048 = first 256 bytes), followed by
+//   the aes cipher with a new, random iv in the first 12 bytes,
+//   and the auth tag in the last 16 bytes of the cipher.
+// - must have RSA key >= 1024
+// - end format w/ RSA of 2048 for display purposes, all base64 encoded:
+//   [ 256 byte RSA encrypted AES key | len(payload) AES-GCM cipher | 16 bytes AES tag | 12 bytes AES nonce ]
+// - each task will be encrypted with a different AES session key
+//
+// EncryptPayloads will return a copy of the input tasks with the Payload field modified
+// to be encrypted as described above. Upon any error, the tasks returned will be nil.
+func EncryptPayloads(publicKey []byte, in ...Task) ([]Task, error) {
+	rsablock, _ := pem.Decode(publicKey)
+	rsaKey, err := x509.ParsePKIXPublicKey(rsablock.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	rsaPublicKey := rsaKey.(*rsa.PublicKey)
+
+	tasks := make([]Task, len(in))
+	copy(tasks, in)
+
+	for i := range tasks {
+		// get a random aes-128 session key to encrypt
+		aesKey := make([]byte, 128/8)
+		if _, err := rand.Read(aesKey); err != nil {
+			return nil, err
+		}
+
+		// have to use sha1 b/c ruby openssl picks it for OAEP:  https://www.openssl.org/docs/manmaster/crypto/RSA_public_encrypt.html
+		aesKeyCipher, err := rsa.EncryptOAEP(sha1.New(), rand.Reader, rsaPublicKey, aesKey, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		block, err := aes.NewCipher(aesKey)
+		if err != nil {
+			return nil, err
+		}
+		gcm, err := cipher.NewGCM(block)
+		if err != nil {
+			return nil, err
+		}
+
+		pbytes := []byte(tasks[i].Payload)
+		// The IV needs to be unique, but not secure. last 12 bytes are IV.
+		ciphertext := make([]byte, len(pbytes)+gcm.Overhead()+gcm.NonceSize())
+		nonce := ciphertext[len(ciphertext)-gcm.NonceSize():]
+		if _, err := rand.Read(nonce); err != nil {
+			return nil, err
+		}
+		// tag is appended to cipher as last 16 bytes. https://golang.org/src/crypto/cipher/gcm.go?s=2318:2357#L145
+		gcm.Seal(ciphertext[:0], nonce, pbytes, nil)
+
+		// base64 the whole thing
+		tasks[i].Payload = base64.StdEncoding.EncodeToString(append(aesKeyCipher, ciphertext...))
+	}
+	return tasks, nil
 }
