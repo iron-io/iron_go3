@@ -504,3 +504,31 @@ func EncryptPayloads(publicKey []byte, in ...Task) ([]Task, error) {
 	}
 	return tasks, nil
 }
+
+type Cluster struct {
+	Id        string `json:"id,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Memory    int64  `json:"memory,omitempty"`
+	DiskSpace int64  `json:"disk_space,omitempty"`
+	CpuShare  *int32 `json:"cpu_share,omitempty"`
+}
+
+func (w *Worker) ClusterCreate(c Cluster) (Cluster, error) {
+	var out struct {
+		C Cluster `json:"cluster"`
+	}
+	err := w.clusters().Req("POST", c, &out)
+	return out.C, err
+}
+
+func (w *Worker) ClusterDelete(id string) error {
+	return w.clusters(id).Req("DELETE", nil, nil)
+}
+
+func (w *Worker) ClusterToken(id string) (string, error) {
+	var out struct {
+		Token string `json:"token"`
+	}
+	err := w.clusters(id, "credentials").Req("GET", nil, &out)
+	return out.Token, err
+}

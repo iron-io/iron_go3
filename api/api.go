@@ -81,11 +81,24 @@ func Action(cs config.Settings, prefix string, suffix ...string) *URL {
 	return ActionEndpoint(cs, strings.Join(parts, "/"))
 }
 
+func RootAction(cs config.Settings, prefix string, suffix ...string) *URL {
+	parts := append([]string{prefix}, suffix...)
+	return RootActionEndpoint(cs, strings.Join(parts, "/"))
+}
+
 func ActionEndpoint(cs config.Settings, endpoint string) *URL {
 	u := &URL{Settings: cs, URL: url.URL{}}
 	u.URL.Scheme = cs.Scheme
 	u.URL.Host = fmt.Sprintf("%s:%d", cs.Host, cs.Port)
 	u.URL.Path = fmt.Sprintf("/%s/projects/%s/%s", cs.ApiVersion, cs.ProjectId, endpoint)
+	return u
+}
+
+func RootActionEndpoint(cs config.Settings, endpoint string) *URL {
+	u := &URL{Settings: cs, URL: url.URL{}}
+	u.URL.Scheme = cs.Scheme
+	u.URL.Host = fmt.Sprintf("%s:%d", cs.Host, cs.Port)
+	u.URL.Path = fmt.Sprintf("/%s/%s", cs.ApiVersion, endpoint)
 	return u
 }
 
@@ -130,6 +143,7 @@ func (u *URL) Req(method string, in, out interface{}) error {
 	if response != nil && response.Body != nil {
 		defer response.Body.Close()
 	}
+
 	if err != nil {
 		dbg("ERROR!", err, err.Error())
 		body := "<empty>"

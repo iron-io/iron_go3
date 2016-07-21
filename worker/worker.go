@@ -19,6 +19,7 @@ func New() *Worker {
 func (w *Worker) codes(s ...string) *api.URL     { return api.Action(w.Settings, "codes", s...) }
 func (w *Worker) tasks(s ...string) *api.URL     { return api.Action(w.Settings, "tasks", s...) }
 func (w *Worker) schedules(s ...string) *api.URL { return api.Action(w.Settings, "schedules", s...) }
+func (w *Worker) clusters(s ...string) *api.URL  { return api.RootAction(w.Settings, "clusters", s...) }
 
 // exponential sleep between retries, replace this with your own preferred strategy
 func sleepBetweenRetries(previousDuration time.Duration) time.Duration {
