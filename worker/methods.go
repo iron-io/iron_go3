@@ -2,7 +2,6 @@ package worker
 
 import (
 	"archive/zip"
-	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -12,6 +11,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"mime/multipart"
@@ -175,57 +175,134 @@ func (w *Worker) CodePackageUpload(args Code) (*Code, error) {
 }
 
 func (w *Worker) codePackageUpload(zipName string, args Code) (*Code, error) {
-	var body bytes.Buffer
-	mWriter := multipart.NewWriter(&body)
+	b := randomBoundary()
+	r := &streamZipPipe{zipName: zipName, args: args, boundary: b}
+	defer r.Close()
+
+	var out Code
+	err := w.codes().
+		SetContentType("multipart/form-data; boundary="+b).
+		Req("POST", r, &out)
+
+	return &out, err
+}
+
+func randomBoundary() string {
+	var buf [30]byte
+	_, err := io.ReadFull(rand.Reader, buf[:])
+	if err != nil {
+		panic(err)
+	}
+	return fmt.Sprintf("%x", buf[:])
+}
+
+// implement seek so that we can retry it. not thread safe,
+// Read and Seek must be called in same thread.
+type streamZipPipe struct {
+	zipName  string
+	args     Code
+	boundary string
+
+	r    io.ReadCloser
+	w    io.WriteCloser
+	once bool
+	err  chan error
+}
+
+// safe to call multiple times, implement io.Closer so http will call this
+func (s *streamZipPipe) Close() error {
+	if s.r != nil {
+		return s.r.Close()
+	}
+	return nil
+}
+
+// only seeks to beginning, ignores parameters
+func (s *streamZipPipe) Seek(offset int64, whence int) (int64, error) {
+	// just restart the whole thing, the last pipe should have errored out and been closed
+	s.r, s.w = io.Pipe()
+	s.err = make(chan error, 1)
+	s.once = true
+	go s.pipe()
+	return 0, nil
+}
+
+func (s *streamZipPipe) Read(b []byte) (int, error) {
+	if !s.once {
+		s.once = true
+		s.r, s.w = io.Pipe()
+		s.err = make(chan error, 1)
+		go s.pipe()
+	}
+
+	select {
+	case err := <-s.err:
+		if err != nil {
+			return 0, err // n should get ignored
+		}
+	default:
+	}
+	return s.r.Read(b)
+}
+
+func (s *streamZipPipe) pipe() {
+	defer s.w.Close()
+
+	mWriter := multipart.NewWriter(s.w)
+	mWriter.SetBoundary(s.boundary)
 	mMetaWriter, err := mWriter.CreateFormField("data")
 	if err != nil {
-		return nil, err
+		s.err <- err
+		return
 	}
 
-	if err := json.NewEncoder(mMetaWriter).Encode(args); err != nil {
-		return nil, err
+	if err := json.NewEncoder(mMetaWriter).Encode(s.args); err != nil {
+		s.err <- err
+		return
 	}
 
-	if zipName != "" {
-		r, err := zip.OpenReader(zipName)
+	if s.zipName != "" {
+		r, err := zip.OpenReader(s.zipName)
 		if err != nil {
-			return nil, err
+			s.err <- err
+			return
 		}
 		defer r.Close()
 
 		mFileWriter, err := mWriter.CreateFormFile("file", "worker.zip")
 		if err != nil {
-			return nil, err
+			s.err <- err
+			return
 		}
 		zWriter := zip.NewWriter(mFileWriter)
 
 		for _, f := range r.File {
 			fWriter, err := zWriter.Create(f.Name)
 			if err != nil {
-				return nil, err
+				s.err <- err
+				return
 			}
 			rc, err := f.Open()
 			if err != nil {
-				return nil, err
+				s.err <- err
+				return
 			}
 			_, err = io.Copy(fWriter, rc)
 			rc.Close()
 			if err != nil {
-				return nil, err
+				s.err <- err
+				return
 			}
 		}
 
-		zWriter.Close()
+		if err := zWriter.Close(); err != nil {
+			s.err <- err
+			return
+		}
 	}
-	mWriter.Close()
-
-	var out Code
-	// wrap body.Bytes() in a bytes.Reader for seekability
-	err = w.codes().
-		SetContentType(mWriter.FormDataContentType()).
-		Req("POST", bytes.NewReader(body.Bytes()), &out)
-
-	return &out, err
+	if err := mWriter.Close(); err != nil {
+		s.err <- err
+	}
 }
 
 func (w *Worker) TaskList() (tasks []TaskInfo, err error) {

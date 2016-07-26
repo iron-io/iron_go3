@@ -184,8 +184,7 @@ func (u *URL) req(method string, body io.ReadSeeker) (response *http.Response, e
 		return nil, err
 	}
 
-	// bytes.Buffer and bytes.Reader both implement `Len() int`, zip uses former, all else latter.
-	// if this changes for some reason, looky here
+	// body=bytes.Reader implements `Len() int`. if this changes for some reason, looky here
 	if s, ok := body.(interface {
 		Len() int
 	}); ok {
@@ -202,7 +201,11 @@ func (u *URL) req(method string, body io.ReadSeeker) (response *http.Response, e
 		request.Header.Set("Content-Type", "application/json")
 	}
 
-	request.Body = ioutil.NopCloser(body)
+	if rc, ok := body.(io.ReadCloser); ok { // stdlib doesn't have ReadSeekCloser :(
+		request.Body = rc
+	} else {
+		request.Body = ioutil.NopCloser(body)
+	}
 
 	dbg("URL:", request.URL.String())
 	dbg("request:", fmt.Sprintf("%#v\n", request))
