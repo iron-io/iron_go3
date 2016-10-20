@@ -118,7 +118,7 @@ func config(fullProduct, env string, configuration *Settings) Settings {
 	base.manualConfig(configuration)
 
 	if base.Token == "" || base.ProjectId == "" {
-		log.Panicln("Didn't find token or project_id in configs. Check your environment or iron.json.")
+		panic("Didn't find token or project_id in configs. Check your environment or iron.json.")
 	}
 
 	return base
