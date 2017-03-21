@@ -316,6 +316,7 @@ func (w *Worker) TaskList() (tasks []TaskInfo, err error) {
 
 type TaskListParams struct {
 	CodeName string
+	Label    string
 	Page     int
 	PerPage  int
 	FromTime time.Time
@@ -328,6 +329,10 @@ func (w *Worker) FilteredTaskList(params TaskListParams) (tasks []TaskInfo, err 
 	url := w.tasks()
 
 	url.QueryAdd("code_name", "%s", params.CodeName)
+
+	if params.Label != "" {
+		url.QueryAdd("label", "%s", params.Label)
+	}
 
 	if params.Page > 0 {
 		url.QueryAdd("page", "%d", params.Page)
