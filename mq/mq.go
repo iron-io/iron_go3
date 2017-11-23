@@ -78,7 +78,7 @@ type PushStatus struct {
 }
 
 type Subscriber struct {
-	Retried    int    `json:"retried"`
+	Retried    int    `json:"tries"`
 	StatusCode int    `json:"status_code"`
 	Status     string `json:"status"`
 	URL        string `json:"url"`
