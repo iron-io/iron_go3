@@ -105,6 +105,7 @@ func init() {
 			Expect(err, ToBeNil)
 
 			msg, err = c.Get()
+			Expect(err, ToBeNil)
 			Expect(msg, ToBeNil)
 
 			time.Sleep(4 * time.Second)
@@ -134,6 +135,46 @@ func init() {
 			info, err = c.Info()
 			Expect(err, ToBeNil)
 			Expect(info.Name, ToEqual, rc.Name)
+
+			err = c.Delete()
+			Expect(err, ToBeNil)
+		})
+	})
+}
+
+func TestSubscriberRetries(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping long-running test for push subscriber retries")
+	}
+
+	defer PrintSpecReport()
+	Describe("IronMQ", func() {
+		It("checks subscriber retries count", func() {
+			name := "pushqueue" + time.Now().String()
+
+			_, err := CreateQueue(name, QueueInfo{Type: "unicast", Push: &PushInfo{
+				Subscribers: []QueueSubscriber{{Name: "devnull", URL: "http://127.0.0.1:8080"}}}})
+			Expect(err, ToBeNil)
+
+			c := q(name)
+
+			id, err := c.PushString("trying")
+			Expect(err, ToBeNil)
+
+			subs, err := c.MessageSubscribers(id)
+			for i := 0; i < 300; i++ {
+				if err != nil || (len(subs) > 0 && subs[0].StatusCode > 0) {
+					break
+				}
+				time.Sleep(1 * time.Second)
+				subs, err = c.MessageSubscribers(id)
+			}
+
+			Expect(err, ToBeNil)
+			Expect(len(subs) > 0, ToBeTrue)
+			if len(subs) > 0 {
+				Expect(subs[0].Retried, ToEqual, 1)
+			}
 
 			err = c.Delete()
 			Expect(err, ToBeNil)
