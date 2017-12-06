@@ -57,7 +57,7 @@ func (w *Worker) WaitForTask(taskId string) chan TaskInfo {
 				return
 			}
 
-			if info.Status == "queued" || info.Status == "running" {
+			if info.Status == "queued" || info.Status == "preparing" || info.Status == "running" {
 				time.Sleep(retryDelay)
 				retryDelay = sleepBetweenRetries(retryDelay)
 			} else {
@@ -79,6 +79,31 @@ func (w *Worker) WaitForTaskLog(taskId string) chan []byte {
 
 		for {
 			log, err := w.TaskLog(taskId)
+			if err != nil {
+				e, ok := err.(api.HTTPResponseError)
+				if ok && e.StatusCode() == 404 {
+					time.Sleep(retryDelay)
+					retryDelay = sleepBetweenRetries(retryDelay)
+					continue
+				}
+				return
+			}
+			out <- log
+			return
+		}
+	}()
+	return out
+}
+
+func (w *Worker) WaitForSyncTaskStdout(taskId string) chan []byte {
+	out := make(chan []byte)
+
+	go func() {
+		defer close(out)
+		retryDelay := 100 * time.Millisecond
+
+		for {
+			log, err := w.TaskStdoutLog(taskId)
 			if err != nil {
 				e, ok := err.(api.HTTPResponseError)
 				if ok && e.StatusCode() == 404 {

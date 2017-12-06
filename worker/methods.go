@@ -58,6 +58,7 @@ type Task struct {
 	Delay    *time.Duration `json:"delay"`
 	Cluster  string         `json:"cluster"`
 	Label    string         `json:"label"`
+	Sync     bool           `json:"sync"`
 }
 
 type TaskInfo struct {
@@ -79,6 +80,7 @@ type TaskInfo struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 	StartTime     time.Time `json:"start_time"`
 	EndTime       time.Time `json:"end_time"`
+	Sync          bool      `json:"sync"`
 }
 
 type CodeSource map[string][]byte // map[pathInZip]code
@@ -374,6 +376,7 @@ func (w *Worker) TaskQueue(tasks ...Task) (taskIds []string, err error) {
 			"priority":  task.Priority,
 			"cluster":   task.Cluster,
 			"label":     task.Label,
+			"sync":      task.Sync,
 		}
 		if task.Timeout != nil {
 			thisTask["timeout"] = (*task.Timeout).Seconds()
@@ -406,6 +409,40 @@ func (w *Worker) TaskQueue(tasks ...Task) (taskIds []string, err error) {
 	return
 }
 
+// TaskRun synchroniously executes a task and returns its stdout
+func (w *Worker) TaskRun(task Task) (taskStdout string, err error) {
+	task.Sync = true
+	taskIds, err := w.TaskQueue(task)
+	if err != nil {
+		return
+	}
+	taskId := taskIds[0]
+	end := time.Duration(3600)
+	if task.Timeout != nil {
+		end = *task.Timeout + 15
+	}
+
+	select {
+	case info := <-w.WaitForTask(taskId):
+		if info.Status != "complete" {
+			err = fmt.Errorf("Error during task execution: status: %s, message: %s", info.Status, info.Msg)
+			return
+		}
+	case <-time.After(end * time.Second):
+		err = fmt.Errorf("Timeout waiting for task execution")
+		return
+	}
+
+	select {
+	case info := <-w.WaitForSyncTaskStdout(taskId):
+		taskStdout = string(info)
+	case <-time.After(60 * time.Second):
+		err = fmt.Errorf("Timeout waiting for stdout contents")
+		return
+	}
+	return
+}
+
 // TaskInfo gives info about a given task
 func (w *Worker) TaskInfo(taskId string) (task TaskInfo, err error) {
 	out := TaskInfo{}
@@ -415,6 +452,18 @@ func (w *Worker) TaskInfo(taskId string) (task TaskInfo, err error) {
 
 func (w *Worker) TaskLog(taskId string) (log []byte, err error) {
 	response, err := w.tasks(taskId, "log").Request("GET", nil)
+	if err != nil {
+		return
+	}
+
+	log, err = ioutil.ReadAll(response.Body)
+	return
+}
+
+// TaskStdoutLog gets a stdout of a given sync task.
+// Not applicable for async tasks.
+func (w *Worker) TaskStdoutLog(taskId string) (log []byte, err error) {
+	response, err := w.tasks(taskId, "outlog").Request("GET", nil)
 	if err != nil {
 		return
 	}
