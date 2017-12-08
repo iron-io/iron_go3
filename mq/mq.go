@@ -71,14 +71,8 @@ type Message struct {
 	q             Queue     // todo: shouldn't this be a pointer?
 }
 
-type PushStatus struct {
-	Retried    int    `json:"retried"`
-	StatusCode int    `json:"status_code"`
-	Status     string `json:"status"`
-}
-
 type Subscriber struct {
-	Retried    int    `json:"retried"`
+	Retried    int    `json:"tries"`
 	StatusCode int    `json:"status_code"`
 	Status     string `json:"status"`
 	URL        string `json:"url"`
