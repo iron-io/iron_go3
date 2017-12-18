@@ -526,5 +526,27 @@ Returns an array of subscribers with status.
 * [Other Client Libraries](http://dev.iron.io/mq/3/libraries/)
 * [Live Chat, Support & Fun](http://get.iron.io/chat)
 
+
+# IronWorker
+
+[IronWorker](https://www.iron.io/worker) is a hosted background job solution that lets you run your containers with dynamic scale, detailed analytics and world class customer support.
+
+The [full API documentation is here](http://dev.iron.io/worker/reference/api/) and this client tries to stick to the API as
+much as possible so if you see an option in the API docs, you can use it in the methods below.
+
+## Sync tasks
+
+Run you worker in synchronous manner. Standard output of your code will be returned from a `TaskRun` method.
+
+This feature is experimental and may be changed in the future without notice.
+
+```go
+task := worker.Task{CodeName: "iron/hello"}
+w := worker.New()
+result, err := w.TaskRun(task)
+```
+
+Full example is [here](examples/tasks/sync/main.go). You need a configured `iron.json` file near `main.go`.
+
 -------------
 © 2011 - 2014 Iron.io Inc. All Rights Reserved.
