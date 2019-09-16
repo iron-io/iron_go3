@@ -21,6 +21,7 @@ import (
 type Schedule struct {
 	CodeName       string         `json:"code_name"`
 	Delay          *time.Duration `json:"delay"`
+	Timeout        *time.Duration `json:"timeout"`
 	EndAt          *time.Time     `json:"end_at"`
 	MaxConcurrency *int           `json:"max_concurrency"`
 	Name           string         `json:"name"`
@@ -467,6 +468,9 @@ func (w *Worker) Schedule(schedules ...Schedule) (scheduleIds []string, err erro
 		}
 		if schedule.Delay != nil {
 			sm["delay"] = (*schedule.Delay).Seconds()
+		}
+		if schedule.Timeout != nil {
+			sm["timeout"] = (*schedule.Timeout).Seconds()
 		}
 		if schedule.EndAt != nil {
 			sm["end_at"] = *schedule.EndAt
