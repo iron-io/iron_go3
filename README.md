@@ -518,6 +518,13 @@ Returns an array of subscribers with status.
 
 --
 
+## Important notes
+
+* The library will retry request up to 5 times to appropriate endpoint with the same data. It happens if HTTP API
+response's status code is 503 (service unavailable) or response error is `EOF`. This helps to avoid possible load balancer
+issues, like overlaps. See [this code](https://github.com/iron-io/iron_go3/blob/master/api/api.go#L151-L171) for
+more information.
+
 ## Further Links
 
 * [IronMQ Overview](http://dev.iron.io/mq/3/)
